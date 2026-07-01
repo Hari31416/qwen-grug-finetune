@@ -29,7 +29,7 @@ Important nuance from those projects:
 
 > Grug mode shrinks the **mouth**, not necessarily the **brain**. Output compression ≠ internal reasoning compression.
 
-This project tests a more interesting question: **can a small model learn compressed reasoning traces that still solve problems** — not just shorter final answers?
+This project tests a more interesting question: **can a small model learn compressed visible reasoning traces that still solve problems** — not just shorter final answers?
 
 Research is mixed on aggressive reasoning compression:
 
@@ -48,8 +48,8 @@ The pipeline treats the **target model** as a config parameter. Start with 0.8B;
 
 | Variant            | MLX model ID                            | Peak RAM (LoRA) | Role                                        |
 | ------------------ | --------------------------------------- | --------------- | ------------------------------------------- |
-| **0.8B** (default) | `mlx-community/Qwen3.5-0.8B-4bit-OptiQ` | ~4 GB           | Primary — fast experiments                  |
-| **2B** (fallback)  | `mlx-community/Qwen3.5-2B-4bit-OptiQ`   | ~6 GB           | If 0.8B accuracy or style learning plateaus |
+| **0.8B** (default) | `mlx-community/Qwen3.5-0.8B-OptiQ-4bit` | ~4 GB           | Primary — fast experiments                  |
+| **2B** (fallback)  | `mlx-community/Qwen3.5-2B-OptiQ-4bit`   | ~6 GB           | If 0.8B accuracy or style learning plateaus |
 
 Additional Qwen 3.5 sizes (4B, 9B, …) can be added to the same config table later if RAM allows.
 
@@ -60,13 +60,20 @@ One file drives all scripts:
 ```yaml
 target_model:
   name: qwen3.5-0.8b          # logical id — used in paths and result labels
-  mlx_path: mlx-community/Qwen3.5-0.8B-4bit-OptiQ
+  mlx_path: mlx-community/Qwen3.5-0.8B-OptiQ-4bit
   size: 0.8b
 
 # To fall back to 2B, change only these fields:
 #   name: qwen3.5-2b
-#   mlx_path: mlx-community/Qwen3.5-2B-4bit-OptiQ
+#   mlx_path: mlx-community/Qwen3.5-2B-OptiQ-4bit
 #   size: 2b
+
+run:
+  seed: 42
+  temperature: 0.6
+  top_p: 0.95
+  max_generation_tokens: 1024
+  eval_max_generation_tokens: 1024
 
 paths:
   adapters: adapters/{name}/   # LoRA weights — per model, not shared
@@ -75,6 +82,8 @@ paths:
 ```
 
 Every script (`generate_traces`, `eval`, `train`) reads `target_model` from config. CLI override optional: `--model qwen3.5-2b`.
+
+**Smoke-test requirement:** Before building the full pipeline, verify that the exact configured MLX checkpoint works for both inference and a tiny LoRA run. OptiQ checkpoints are standard MLX checkpoints, but training support should be confirmed with 5–10 rows before spending time on data generation.
 
 ### What is shared vs model-specific
 
@@ -125,10 +134,12 @@ This avoids distribution bias: fine-tune teaches *how to think* (Grug), not *how
 
 ```txt
 SFT prompts (StrategyQA, LogiQA, BoolQ, ANLI, PIQA, ReClor)
-    → target model raw CoT → OpenAI compress → Grug traces → LoRA
+    → target model raw CoT → ground-truth filter → OpenAI compress → Grug traces → LoRA
 
 GSM8K test / ARC eval  →  baseline + fine-tuned eval only (never in SFT)
 ```
+
+Critical guardrail: keep only SFT rows where the target model's generated final answer matches the dataset's ground-truth label. The compressor should shorten correct reasoning, not preserve a wrong answer just because raw and compressed outputs agree.
 
 ---
 
@@ -181,13 +192,14 @@ For each benchmark, run **base target model** and **fine-tuned model** (same `co
 | Metric                        | Definition                                                   |
 | ----------------------------- | ------------------------------------------------------------ |
 | **Accuracy**                  | Task-specific (exact match / MC accuracy)                    |
-| **Thinking tokens / problem** | Token count of `` block only                                 |
+| **Thinking tokens / problem** | Token count of visible `<think>` block only                  |
 | **Answer tokens / problem**   | Token count of final answer                                  |
 | **Total tokens / problem**    | Thinking + answer                                            |
 | **Tokens per correct answer** | Total tokens ÷ number correct (efficiency given correctness) |
 | **Latency**                   | Wall-clock and tok/s on M4                                   |
+| **Format compliance**         | Parseable thinking block + final answer / choice format      |
 
-Report results per benchmark. Primary success criterion: **similar or better accuracy with meaningfully fewer thinking tokens** — on data the model never trained on.
+Report results per benchmark. Primary success criterion: **similar or better accuracy with meaningfully fewer emitted thinking tokens** — on data the model never trained on.
 
 ### Domains deferred (optional later)
 
@@ -202,7 +214,8 @@ Report results per benchmark. Primary success criterion: **similar or better acc
 flowchart LR
     A[Define Grug spec] --> B[Sample SFT prompts]
     B --> C[Generate raw CoT on target model]
-    C --> D[Compress traces via OpenAI]
+    C --> V[Filter by dataset ground truth]
+    V --> D[Compress traces via OpenAI]
     D --> E[Baseline eval on GSM8K / ARC]
     E --> F[LoRA SFT on Mac]
     F --> G[Compare accuracy + tokens on benchmarks]
@@ -275,9 +288,10 @@ General-purpose prompt (StrategyQA / LogiQA / BoolQ / ANLI / PIQA / ReClor)
 
 1. Feed general-purpose prompt to target model with thinking enabled
 2. Capture `raw_thinking`, `answer`
-3. Prompt compressor: given question + raw_thinking + answer + Grug style guide → output `grug_thinking`
-4. Validate: compressed trace must not change the answer; reject or flag if logic steps were dropped
-5. Format as MLX training example
+3. Compare `answer` against the dataset's ground-truth label; reject wrong or unparseable rows
+4. Prompt compressor: given question + raw_thinking + answer + Grug style guide → output `grug_thinking`
+5. Validate: compressed trace must not change the answer; reject or flag if logic steps were dropped
+6. Format as MLX training example
 
 ### Stage 2 — Higher-quality raw CoT (later iteration)
 
@@ -296,33 +310,56 @@ General-purpose prompt
 
 **Decision:** Defer choice of stage-2 raw trace model until stage 1 results are in.
 
+### Stored row schema
+
+Keep structured JSONL before producing MLX `text` rows:
+
+```json
+{
+  "id": "strategyqa-0001",
+  "source": "strategyqa",
+  "prompt": "...",
+  "choices": ["yes", "no"],
+  "ground_truth": "yes",
+  "raw_thinking": "...",
+  "raw_answer": "yes",
+  "grug_thinking": "facts: ...\nans: yes",
+  "accepted": true,
+  "accepted_reason": "answer_matches_ground_truth"
+}
+```
+
+Split train/valid after filtering, or refill rejected rows so the final dataset still has 900 train and 100 valid examples.
+
 ### Spot-checking
 
 Manually review ~100 compressed examples before first training run:
 
 - Did compression drop a necessary step?
-- Is the answer still correct?
+- Is the answer still correct against the dataset label?
 - Is Grug style consistent?
 
 Discard or fix failures before training.
 
-**Validation policy:** Auto-reject answer mismatches + manual spot-check (no LLM-judge on every row for v1).
+**Validation policy:** Auto-reject rows where raw answer mismatches ground truth, auto-reject compressed answer mismatches, then manual spot-check (no LLM-judge on every row for v1).
 
 ### Qwen 3.5 chat format
 
 ```txt
 <|im_start|>user
 {question}
+<|im_end|>
 
 <|im_start|>assistant
-
+<think>
 {grug_reasoning}
-
+</think>
 
 {final_answer}
+<|im_end|>
 ```
 
-For MLX, store as JSONL with a `text` field containing the full formatted conversation.
+For MLX, store as JSONL with a `text` field containing the full formatted conversation. Prefer the tokenizer's chat template when available, then verify it preserves the visible `<think>...</think>` reasoning channel.
 
 ### Data volume & splits
 
@@ -334,6 +371,7 @@ For MLX, store as JSONL with a `text` field containing the full formatted conver
 | **Benchmark eval** | ARC-Challenge eval split                           | Week 2 (eval only)          |
 
 - **Blocklist:** No GSM8K or ARC rows in SFT pipeline
+- **Correctness filter:** raw answer must match the source dataset label before compression
 - SFT valid split is for training loss monitoring — not the same as benchmark eval
 
 ---
@@ -345,9 +383,17 @@ Run **base target model** (from config) on held-out benchmark splits and record:
 - Accuracy per domain (GSM8K exact match, ARC letter accuracy)
 - Thinking tokens per problem
 - Total tokens and latency on M4
+- Format compliance (% parseable thinking block and final answer)
 - Failure modes (truncated logic, arithmetic slips, wrong format)
 
 Save baseline results to `results/{model_name}/baseline/` — all post-training comparisons reference this. Keeps 0.8B and 2B runs separate if both are tried.
+
+Run two baseline prompt modes:
+
+1. **Base / normal prompt** — no Grug instruction
+2. **Base / Grug prompt** — explicit Grug-style instruction, no adapter
+
+These show whether LoRA improves beyond prompt-only style control.
 
 ---
 
@@ -368,7 +414,7 @@ pip install mlx-lm
 
 # Train — model path read from config or passed explicitly
 mlx_lm.lora \
-  --model mlx-community/Qwen3.5-0.8B-4bit-OptiQ \
+  --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit \
   --adapter-path adapters/qwen3.5-0.8b \
   --train \
   --data ./data \
@@ -378,7 +424,7 @@ mlx_lm.lora \
 
 # Optional: fuse adapter for easier inference
 mlx_lm.fuse \
-  --model mlx-community/Qwen3.5-0.8B-4bit-OptiQ \
+  --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit \
   --adapter-path adapters/qwen3.5-0.8b
 ```
 
@@ -438,17 +484,29 @@ Compare **base vs fine-tuned** on the same held-out benchmarks (GSM8K test, ARC 
 | Metric                            | What it tells you                |
 | --------------------------------- | -------------------------------- |
 | **Accuracy**                      | Did compression break reasoning? |
-| **Thinking tokens / problem**     | Primary "Grug efficiency" metric |
+| **Thinking tokens / problem**     | Emitted Grug efficiency metric   |
 | **Total tokens (think + answer)** | End-to-end cost                  |
 | **Tokens per correct answer**     | Efficiency *given* correctness   |
 | **Latency (tok/s on M4)**         | Practical edge benefit           |
+| **Format compliance**             | Whether outputs stay parseable   |
 | **Error type breakdown**          | Logic vs arithmetic vs format    |
+
+### Required comparison modes
+
+Run each benchmark with identical sampling, seed, and max-generation settings:
+
+| Mode                       | Adapter | Prompt style     | Purpose                                  |
+| -------------------------- | ------- | ---------------- | ---------------------------------------- |
+| Base / normal              | Off     | Normal reasoning | True baseline                            |
+| Base / Grug prompt         | Off     | Explicit Grug    | Prompt-only compression baseline         |
+| Fine-tuned / normal prompt | On      | Normal reasoning | Tests whether LoRA internalized style    |
+| Fine-tuned / Grug prompt   | On      | Explicit Grug    | Best-case style adherence / sanity check |
 
 ### Ablations
 
 - **Stage 1 vs stage 2 training data** — self-traces vs stronger-model traces
 - **Fixed thinking token budget** (Week 2) — 256 / 512 caps; primary eval has no cap
-- **Answer-only terse fine-tune** (no Grug thinking) — isolates mouth vs brain
+- **Answer-only terse fine-tune** (no Grug thinking) — isolates shorter final output vs shorter visible reasoning
 - **Per-benchmark breakdown** — GSM8K vs ARC
 
 ### Deliverable
@@ -473,7 +531,7 @@ This project is structured to build hands-on skill in:
 
 ### Likely achievable
 
-- 30–60% shorter thinking traces on benchmark prompts (if style transfers)
+- 30–60% shorter emitted thinking traces on benchmark prompts (if style transfers)
 - Faster inference on device
 - Solid end-to-end fine-tuning workflow on Apple Silicon
 - Clear benchmark comparison (base vs fine-tuned)
@@ -481,7 +539,7 @@ This project is structured to build hands-on skill in:
 ### Hard / unlikely
 
 - Matching frontier-model reasoning quality at 0.8B
-- Proving proprietary models use internal "Grug" (we cannot)
+- Proving proprietary models use internal "Grug" (we cannot observe hidden reasoning)
 - Large accuracy gains — expect trade-offs, not free lunch
 - Very hard multi-step problems — model capacity is the ceiling
 
@@ -509,7 +567,7 @@ See [When to switch to 2B](#when-to-switch-to-2b) above. The 2B variant fits com
 | **SFT size (v1)**           | 1,000 prompts (900 train / 100 valid)                                           |
 | **ARC timing**              | Week 2 eval (defer until pipeline validated)                                    |
 | **Grug tereness**           | Moderate — telegraphic fragments, all logic steps preserved                     |
-| **Compression validation**  | Auto-reject answer mismatch + manual spot-check ~100 examples                   |
+| **Compression validation**  | Ground-truth filter + compressed-answer match + manual spot-check ~100 examples |
 | **Compressor**              | OpenAI API — user provides API key, base URL, and model name via env            |
 | **Stage 2 raw trace model** | Decide after stage 1 results                                                    |
 | **Thinking token budget**   | No cap in primary eval; capped ablations (256/512) in Week 2                    |
@@ -538,8 +596,8 @@ qwen-finetune/
 │   ├── config.py                # load config.yaml, resolve paths
 │   ├── sample_sft_prompts.py    # sample general corpus, blocklist benchmarks
 │   ├── generate_traces.py       # target model → raw CoT (stage 1)
-│   ├── compress_traces.py       # raw CoT → Grug via OpenAI
-│   ├── validate_traces.py       # answer match + spot-check helpers
+│   ├── compress_traces.py       # correct raw CoT → Grug via OpenAI
+│   ├── validate_traces.py       # ground-truth, answer match + spot-check helpers
 │   ├── format_data.py           # validated traces → MLX JSONL
 │   ├── train.py                 # wrapper around mlx_lm.lora using config
 │   └── eval.py                  # benchmark eval: accuracy + token counts
