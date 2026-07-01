@@ -44,6 +44,28 @@ def load_compression_system_prompt() -> str:
     )
 
 
+def build_compressed_record(record: Dict[str, Any], compressed_thinking: str) -> Dict[str, Any]:
+    """Build a compressed trace record from a raw record and compressed thinking text."""
+    return {
+        "id": record["id"],
+        "source": record["source"],
+        "prompt": record["prompt"],
+        "choices": record.get("choices"),
+        "ground_truth": record["ground_truth"],
+        "raw_thinking": record["raw_thinking"],
+        "compressed_thinking": compressed_thinking,
+        "raw_answer": record["raw_answer"],
+        "raw_answer_correct": record["raw_answer_correct"],
+    }
+
+
+def write_compressed_batch(out_f, records: List[Dict[str, Any]]) -> None:
+    """Append a batch of compressed records to the output JSONL file."""
+    for compressed_record in records:
+        out_f.write(json.dumps(compressed_record) + "\n")
+    out_f.flush()
+
+
 async def compress_trace(
     client: AsyncOpenAI,
     model: str,
@@ -72,7 +94,24 @@ async def compress_trace(
             return ""
 
 
-async def main_async(limit: int = None, concurrency: int = 5) -> None:
+async def compress_record(
+    client: AsyncOpenAI,
+    model: str,
+    record: Dict[str, Any],
+    system_prompt: str,
+    semaphore: asyncio.Semaphore,
+) -> Dict[str, Any] | None:
+    """Compress one raw record and return the compressed record, or None on failure."""
+    compressed_thinking = await compress_trace(
+        client, model, record["raw_thinking"], system_prompt, semaphore
+    )
+    if not compressed_thinking:
+        logger.warning("Skipping ID=%s due to empty or failed compression output.", record["id"])
+        return None
+    return build_compressed_record(record, compressed_thinking)
+
+
+async def main_async(limit: int = None, concurrency: int = 5, batch_size: int = 10) -> None:
     # Set up directories
     config.setup_directories()
     
@@ -140,45 +179,54 @@ async def main_async(limit: int = None, concurrency: int = 5) -> None:
     client = AsyncOpenAI(api_key=api_key, base_url=api_base)
     semaphore = asyncio.Semaphore(concurrency)
 
-    # Run async tasks
+    os.makedirs(os.path.dirname(compressed_traces_file), exist_ok=True)
     tasks = [
-        compress_trace(client, api_model, record["raw_thinking"], system_prompt, semaphore)
+        asyncio.create_task(
+            compress_record(client, api_model, record, system_prompt, semaphore)
+        )
         for record in records_to_compress
     ]
-    
-    compressed_thinking_list = await asyncio.gather(*tasks)
-    
-    # Save results to compressed traces file
-    os.makedirs(os.path.dirname(compressed_traces_file), exist_ok=True)
+
+    saved_count = 0
+    pending_batch: List[Dict[str, Any]] = []
+    total_to_compress = len(records_to_compress)
+
     with open(compressed_traces_file, "a", encoding="utf-8") as out_f:
-        for record, compressed_thinking in zip(records_to_compress, compressed_thinking_list):
-            if not compressed_thinking:
-                logger.warning("Skipping ID=%s due to empty or failed compression output.", record["id"])
+        for completed in asyncio.as_completed(tasks):
+            compressed_record = await completed
+            if compressed_record is None:
                 continue
-                
-            compressed_record = {
-                "id": record["id"],
-                "source": record["source"],
-                "prompt": record["prompt"],
-                "choices": record.get("choices"),
-                "ground_truth": record["ground_truth"],
-                "raw_thinking": record["raw_thinking"],
-                "compressed_thinking": compressed_thinking,
-                "raw_answer": record["raw_answer"],
-                "raw_answer_correct": record["raw_answer_correct"]
-            }
-            out_f.write(json.dumps(compressed_record) + "\n")
-            
-    logger.info("Trace compression complete! Saved results to %s.", compressed_traces_file)
+
+            pending_batch.append(compressed_record)
+            if len(pending_batch) >= batch_size:
+                write_compressed_batch(out_f, pending_batch)
+                saved_count += len(pending_batch)
+                logger.info("Saved %d/%d compressed traces.", saved_count, total_to_compress)
+                pending_batch.clear()
+
+        if pending_batch:
+            write_compressed_batch(out_f, pending_batch)
+            saved_count += len(pending_batch)
+            logger.info("Saved %d/%d compressed traces.", saved_count, total_to_compress)
+
+    logger.info("Trace compression complete! Saved %d traces to %s.", saved_count, compressed_traces_file)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compress raw CoT traces into Grug-style telegraphic thinking blocks.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of traces to compress")
     parser.add_argument("--concurrency", type=int, default=3, help="Number of concurrent API requests")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Number of compressed traces to buffer before writing to disk",
+    )
     args = parser.parse_args()
-    
-    asyncio.run(main_async(limit=args.limit, concurrency=args.concurrency))
+
+    asyncio.run(
+        main_async(limit=args.limit, concurrency=args.concurrency, batch_size=args.batch_size)
+    )
 
 
 if __name__ == "__main__":
