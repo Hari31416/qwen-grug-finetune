@@ -21,10 +21,10 @@ Scaffold → Inference + tiny LoRA smoke test → Style guide → Sample prompts
 
 ## Phase 0 — Prerequisites
 
-- [ ] Python 3.10+ installed
-- [ ] ~10 GB free disk (model weights + data)
-- [ ] OpenAI API credentials ready (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`)
-- [ ] Hugging Face access for datasets (`huggingface-cli login` if needed)
+- [x] Python 3.10+ installed
+- [x] ~10 GB free disk (model weights + data)
+- [x] OpenAI API credentials ready (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`)
+- [x] Hugging Face access for datasets (`huggingface-cli login` if needed)
 
 **Verify Apple Silicon MLX:**
 
@@ -39,13 +39,13 @@ python -c "import mlx.core as mx; print(mx.default_device())"
 
 **Goal:** Config, deps, and directory layout so every script shares one source of truth.
 
-- [ ] Create `config.yaml` (model path, paths, dataset sample sizes)
-- [ ] Add reproducibility fields to `config.yaml` (`seed`, sampling params, max generation tokens)
-- [ ] Create `.gitignore` (`data/`, `adapters/`, `results/`, `.env`)
-- [ ] Create `requirements.txt` or `pyproject.toml` (`mlx-lm`, `datasets`, `openai`, `pyyaml`, `python-dotenv`)
-- [ ] Create `.env.example`
-- [ ] Create `scripts/config.py` — load config, resolve `{name}` path templates
-- [ ] Create empty dirs: `data/sft/`, `data/raw/`, `data/compressed/`, `adapters/`, `results/`
+- [x] Create `config.yaml` (model path, paths, dataset sample sizes)
+- [x] Add reproducibility fields to `config.yaml` (`seed`, sampling params, max generation tokens)
+- [x] Create `.gitignore` (`data/`, `adapters/`, `results/`, `.env`)
+- [x] Create `requirements.txt` or `pyproject.toml` (`mlx-lm`, `datasets`, `openai`, `pyyaml`, `python-dotenv`)
+- [x] Create `.env.example`
+- [x] Create `scripts/config.py` — load config, resolve `{name}` path templates
+- [x] Create empty dirs: `data/sft/`, `data/raw/`, `data/compressed/`, `adapters/`, `results/`
 
 **Milestone:** `python scripts/config.py` prints model name and resolved paths.
 
@@ -66,10 +66,10 @@ lora_config.yaml
 
 **Goal:** Confirm Qwen 3.5 0.8B runs on M4 with thinking mode before building the pipeline.
 
-- [ ] Download / cache model: `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`
-- [ ] Run a single generation with a reasoning prompt
-- [ ] Confirm output contains a thinking block + final answer
-- [ ] Confirm the exact configured checkpoint supports a tiny LoRA run before full data generation
+- [x] Download / cache model: `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`
+- [x] Run a single generation with a reasoning prompt
+- [x] Confirm output contains a thinking block + final answer
+- [x] Confirm the exact configured checkpoint supports a tiny LoRA run before full data generation
 
 ```bash
 mlx_lm.generate \

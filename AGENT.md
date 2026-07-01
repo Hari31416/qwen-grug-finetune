@@ -1,0 +1,2 @@
+- Update `STEPS.md` file checklist once done.
+- Update `STEPS_RESULT.md` file with headers similar to `Phase 2` section.

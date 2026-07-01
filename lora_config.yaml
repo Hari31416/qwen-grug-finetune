@@ -4,6 +4,7 @@
 lora_parameters:
   rank: 8
   alpha: 16
+  scale: 2.0
   dropout: 0.05
   keys: 
     - "self_attn.q_proj"
