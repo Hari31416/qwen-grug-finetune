@@ -1,6 +1,6 @@
 # Makefile for Qwen SFT Fine-Tuning, Evaluation, and Visualizations
 
-PYTHON = .venv/bin/python
+PYTHON = uv run python
 LIMIT = 100
 BATCH_SIZE = 16
 ITERS = 300

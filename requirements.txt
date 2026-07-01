@@ -1,6 +1,0 @@
-mlx-lm
-datasets
-openai
-pyyaml
-python-dotenv
-matplotlib

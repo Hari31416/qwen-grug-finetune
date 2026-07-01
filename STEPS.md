@@ -42,7 +42,7 @@ python -c "import mlx.core as mx; print(mx.default_device())"
 - [x] Create `config.yaml` (model path, paths, dataset sample sizes)
 - [x] Add reproducibility fields to `config.yaml` (`seed`, sampling params, max generation tokens)
 - [x] Create `.gitignore` (`data/`, `adapters/`, `results/`, `.env`)
-- [x] Create `requirements.txt` or `pyproject.toml` (`mlx-lm`, `datasets`, `openai`, `pyyaml`, `python-dotenv`)
+- [x] Create `pyproject.toml` (`mlx-lm`, `datasets`, `openai`, `pyyaml`, `python-dotenv`)
 - [x] Create `.env.example`
 - [x] Create `scripts/config.py` — load config, resolve `{name}` path templates
 - [x] Create empty dirs: `data/sft/`, `data/raw/`, `data/compressed/`, `adapters/`, `results/`
@@ -55,7 +55,7 @@ python -c "import mlx.core as mx; print(mx.default_device())"
 config.yaml
 .env.example
 .gitignore
-requirements.txt
+pyproject.toml
 scripts/config.py
 lora_config.yaml
 ```
@@ -286,7 +286,7 @@ Steps:
 
 ```bash
 # 1. Setup
-pip install -r requirements.txt
+uv sync
 cp .env.example .env   # fill in OpenAI vars
 
 # 2. Sample prompts

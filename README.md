@@ -32,18 +32,16 @@ The model targets and training hyperparameters are defined in:
 
 ### 1. Installation
 
-Create a Python virtual environment and install requirements:
+Initialize and sync the virtual environment using `uv`:
 
 ```bash
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
+uv sync
 ```
 
 Verify that MLX has Apple Silicon GPU access:
 
 ```bash
-python -c "import mlx.core as mx; print(mx.default_device())"
+uv run python -c "import mlx.core as mx; print(mx.default_device())"
 ```
 
 Setup environment variables by copying `.env.example` to `.env`:
