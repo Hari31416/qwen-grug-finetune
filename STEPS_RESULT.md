@@ -96,7 +96,7 @@
 - Implemented `scripts/compress_traces.py` to execute asynchronous, concurrent Grug-style trace compression using the Nvidia NIM Integrate API (`openai/gpt-oss-120b`).
 - Implemented `scripts/validate_traces.py` to enforce style-guide validation checks (rejecting traces exceeding 50% length or containing answer restatements).
 - Implemented `scripts/format_data.py` to format accepted records into train/valid SFT JSONL splits while preserving thinking tags.
-- Verified the end-to-end pipeline by running it on the first 10 StrategyQA prompts, yielding 4 accepted, fully formatted training SFT rows.
+- Verified the end-to-end pipeline by running it on the first 10 StrategyQA prompts (later switched pilot to BoolQ for passage-grounded yes/no reasoning).
 
 ### Model Change Logic
 
@@ -109,7 +109,7 @@ Initially, we ran the raw trace generation using the target `Qwen3.5-0.8B-OptiQ-
 - Run local trace generation:
 
   ```bash
-  ./.venv/bin/python scripts/generate_traces.py --limit 10
+  ./.venv/bin/python scripts/generate_traces.py --source boolq --limit 10
   ```
 
 - Run asynchronous compression:
@@ -154,3 +154,4 @@ Initially, we ran the raw trace generation using the target `Qwen3.5-0.8B-OptiQ-
 - Added `validated_traces` path to `config.yaml` / `scripts/config.py`.
 - Updated `STEPS.md`, `PLAN.md`, and `README.md` to reflect DeepSeek-R1-Distill-Qwen-1.5B as the permanent target model for CoT generation, SFT, and LoRA.
 - Re-ran validation on pilot data: 3/4 accepted, 1 rejected (truncated compression for `strategyqa-0004`).
+- Switched pilot source from StrategyQA to BoolQ: answers are passage-grounded (higher raw correctness expected); use `--source boolq --limit 10` for pilot runs. Full 1k pipeline uses all six sources.

@@ -54,7 +54,7 @@ python scripts/config.py
 ## Pilot pipeline
 
 ```bash
-python scripts/generate_traces.py --limit 10
+python scripts/generate_traces.py --source boolq --limit 10
 python scripts/compress_traces.py --limit 10
 python scripts/validate_traces.py --report
 python scripts/format_data.py

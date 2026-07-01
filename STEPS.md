@@ -138,7 +138,7 @@ Build scripts in this order:
 
 **Pilot run:**
 
-- [x] Take first 10 prompts from `data/sft/prompts.jsonl`
+- [x] Take first 10 BoolQ prompts from `data/sft/prompts.jsonl` (`--source boolq --limit 10`)
 - [x] Generate raw CoT locally (DeepSeek-R1 1.5B, thinking on)
 - [x] Parse raw thinking and final answer
 - [x] Validate raw final answer against the source dataset's ground truth
@@ -292,8 +292,8 @@ cp .env.example .env   # fill in OpenAI vars
 # 2. Sample prompts
 python scripts/sample_sft_prompts.py
 
-# 3. Pilot (10 rows)
-python scripts/generate_traces.py --limit 10
+# 3. Pilot (10 BoolQ rows)
+python scripts/generate_traces.py --source boolq --limit 10
 python scripts/compress_traces.py --limit 10
 python scripts/validate_traces.py
 python scripts/format_data.py

@@ -59,13 +59,23 @@ def is_correct_answer(raw_answer: str, ground_truth: str, source: str) -> bool:
     return False
 
 
+VALID_SOURCES = ("strategyqa", "logiqa", "boolq", "anli", "piqa", "reclor")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate raw CoT traces using target MLX model")
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Limit the number of prompts to process (useful for pilot runs)"
+        help="Limit the number of prompts to process (useful for pilot runs)",
+    )
+    parser.add_argument(
+        "--source",
+        type=str,
+        default=None,
+        choices=VALID_SOURCES,
+        help="Only process prompts from this dataset source (e.g. boolq for pilot)",
     )
     args = parser.parse_args()
 
@@ -82,9 +92,15 @@ def main() -> None:
 
     logger.info("Loaded %d prompts from %s.", len(prompts), config.sft_prompts)
 
-    # Determine target limit
+    if args.source is not None:
+        prompts = [p for p in prompts if p["source"] == args.source]
+        logger.info("Filtered to %d prompts from source=%s.", len(prompts), args.source)
+        if not prompts:
+            logger.error("No prompts found for source=%s.", args.source)
+            sys.exit(1)
+
     if args.limit is not None:
-        prompts = prompts[:args.limit]
+        prompts = prompts[: args.limit]
         logger.info("Limiting execution to the first %d prompts for this run.", args.limit)
 
     # Setup directories and determine output file path
