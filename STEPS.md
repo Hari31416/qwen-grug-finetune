@@ -180,9 +180,9 @@ Build scripts in this order:
   - Total tokens
   - Latency / tok/s
   - Format compliance (parseable `<think>` block + final answer)
-- [ ] Run base model with normal prompt (adapter off)
-- [ ] Run base model with explicit Grug prompt (adapter off)
-- [ ] Save results → `results/deepseek-r1-1.5b/baseline/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
+- [x] Run base model with normal prompt (adapter off)
+- [x] Run base model with explicit Grug prompt (adapter off)
+- [x] Save results → `results/deepseek-r1-1.5b/baseline/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
 
 ```bash
 python scripts/eval.py --benchmark gsm8k --split test
