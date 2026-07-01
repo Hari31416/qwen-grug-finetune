@@ -89,6 +89,12 @@ class AppConfig:
                 name=self.model_name
             ),
         )
+        self.validated_traces: str = os.path.join(
+            self.workspace_root,
+            paths.get("validated_traces", "data/validated/{name}/").format(
+                name=self.model_name
+            ),
+        )
 
     def setup_directories(self) -> None:
         """Create empty directories required for the pipeline if they do not exist."""
@@ -102,6 +108,7 @@ class AppConfig:
             self.results,
             self.raw_traces,
             self.compressed_traces,
+            self.validated_traces,
         ]
 
         for directory in dirs_to_create:
@@ -142,4 +149,5 @@ if __name__ == "__main__":
     logger.info("  Results Dir:       %s", config.results)
     logger.info("  Raw Traces Dir:    %s", config.raw_traces)
     logger.info("  Compressed Traces: %s", config.compressed_traces)
+    logger.info("  Validated Traces:  %s", config.validated_traces)
     logger.info("----------------------------------")

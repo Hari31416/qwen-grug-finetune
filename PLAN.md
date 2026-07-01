@@ -1,12 +1,10 @@
 # Grug Reasoning Fine-Tune — Project Plan
 
-Fine-tune a **Qwen 3.5** model on Apple Silicon (M4) to learn whether telegraphic "Grug/caveman" chain-of-thought can improve **token efficiency** without sacrificing **accuracy**.
+Fine-tune **DeepSeek-R1-Distill-Qwen-1.5B** on Apple Silicon (M4) to learn whether telegraphic "Grug/caveman" chain-of-thought can improve **token efficiency** without sacrificing **accuracy**.
 
-**Default target model:** Qwen 3.5 0.8B (smallest, fastest iteration loop).
+**Target model:** `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit` — used for raw CoT generation, compression SFT, LoRA training, and eval.
 
-**Fallback:** Qwen 3.5 2B if 0.8B lacks capacity or fails to learn Grug style.
-
-All scripts and configs are **model-agnostic within the Qwen 3.5 family** — swap via a single config file, not code changes.
+All scripts and configs are **model-agnostic** — swap via `config.yaml`, not code changes.
 
 **Goal:** Personal learning exercise in data curation, trace compression, LoRA fine-tuning, and benchmark evaluation — not building a tutoring product or education-domain dataset.
 
@@ -36,22 +34,21 @@ Research is mixed on aggressive reasoning compression:
 - [Broken Chains (2026)](https://arxiv.org/pdf/2602.14444) — truncated CoT can **hurt** some models
 - [Brevity constraints](https://arxiv.org/abs/2604.00025) — can sometimes **help** accuracy
 
-Worth testing empirically on small Qwen 3.5 models.
+Worth testing empirically on small reasoning models.
 
 ---
 
 ## Model Selection & Swappability
 
-The pipeline treats the **target model** as a config parameter. Start with 0.8B; switch to 2B (or another Qwen 3.5 variant) without rewriting scripts.
+The pipeline treats the **target model** as a config parameter. The project uses **DeepSeek-R1-Distill-Qwen-1.5B** for all stages (raw CoT, compression SFT, LoRA, eval).
 
-### Supported variants (Qwen 3.5 family)
+### Supported variant
 
-| Variant            | MLX model ID                            | Peak RAM (LoRA) | Role                                        |
-| ------------------ | --------------------------------------- | --------------- | ------------------------------------------- |
-| **0.8B** (default) | `mlx-community/Qwen3.5-0.8B-OptiQ-4bit` | ~4 GB           | Primary — fast experiments                  |
-| **2B** (fallback)  | `mlx-community/Qwen3.5-2B-OptiQ-4bit`   | ~6 GB           | If 0.8B accuracy or style learning plateaus |
+| Variant            | MLX model ID                                        | Peak RAM (LoRA) | Role                                        |
+| ------------------ | --------------------------------------------------- | --------------- | ------------------------------------------- |
+| **1.5B** (default) | `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit` | ~5 GB           | Primary — RL-trained reasoning, native `<think>` |
 
-Additional Qwen 3.5 sizes (4B, 9B, …) can be added to the same config table later if RAM allows.
+**Why not Qwen 3.5 0.8B/2B?** Pilot testing showed standard Qwen 3.5 instruct checkpoints could not reliably complete reasoning traces on general-knowledge SFT prompts (infinite self-correction loops, unclosed thinking tags). DeepSeek-R1-Distill-Qwen was chosen because it natively emits structured reasoning traces with high accuracy on the SFT corpus.
 
 ### Central config (`config.yaml`)
 
@@ -59,21 +56,16 @@ One file drives all scripts:
 
 ```yaml
 target_model:
-  name: qwen3.5-0.8b          # logical id — used in paths and result labels
-  mlx_path: mlx-community/Qwen3.5-0.8B-OptiQ-4bit
-  size: 0.8b
-
-# To fall back to 2B, change only these fields:
-#   name: qwen3.5-2b
-#   mlx_path: mlx-community/Qwen3.5-2B-OptiQ-4bit
-#   size: 2b
+  name: deepseek-r1-1.5b
+  mlx_path: mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit
+  size: 1.5b
 
 run:
   seed: 42
   temperature: 0.6
   top_p: 0.95
-  max_generation_tokens: 1024
-  eval_max_generation_tokens: 1024
+  max_generation_tokens: 1536
+  eval_max_generation_tokens: 1536
 
 paths:
   adapters: adapters/{name}/   # LoRA weights — per model, not shared
@@ -571,7 +563,7 @@ See [When to switch to 2B](#when-to-switch-to-2b) above. The 2B variant fits com
 | **Compressor**              | OpenAI API — user provides API key, base URL, and model name via env            |
 | **Stage 2 raw trace model** | Decide after stage 1 results                                                    |
 | **Thinking token budget**   | No cap in primary eval; capped ablations (256/512) in Week 2                    |
-| **Target model**            | Qwen 3.5 0.8B default; 2B fallback via `config.yaml`                            |
+| **Target model**            | DeepSeek-R1-Distill-Qwen-1.5B via `config.yaml`                                 |
 | **Training method**         | **LoRA** (4-bit QLoRA via MLX) — not full fine-tuning                           |
 | **Config schema**           | Adopt `config.yaml` layout in [Model Selection](#model-selection--swappability) |
 
@@ -582,14 +574,14 @@ See [When to switch to 2B](#when-to-switch-to-2b) above. The 2B variant fits com
 ```txt
 qwen-finetune/
 ├── PLAN.md                      # this file
-├── config.yaml                  # target model + paths — swap 0.8B/2B here
+├── config.yaml                  # target model + paths — swap model here
 ├── style_guide.md               # Grug compression rules + examples
 ├── data/
 │   ├── sft/                     # general-purpose prompts (6 datasets)
 │   ├── raw/
-│   │   ├── qwen3.5-0.8b/        # stage-1 self-traces (per model)
-│   │   └── qwen3.5-2b/
+│   │   └── deepseek-r1-1.5b/    # stage-1 self-traces (per model)
 │   ├── compressed/              # Grug-compressed traces
+│   ├── validated/               # accepted traces after validation
 │   ├── train.jsonl              # MLX-ready SFT data
 │   └── valid.jsonl
 ├── scripts/
@@ -602,13 +594,11 @@ qwen-finetune/
 │   ├── train.py                 # wrapper around mlx_lm.lora using config
 │   └── eval.py                  # benchmark eval: accuracy + token counts
 ├── adapters/
-│   ├── qwen3.5-0.8b/            # LoRA per model (gitignored)
-│   └── qwen3.5-2b/
+│   ├── deepseek-r1-1.5b/        # LoRA per model (gitignored)
 ├── results/
-│   ├── qwen3.5-0.8b/
-│   │   ├── baseline/
-│   │   └── finetuned/
-│   └── qwen3.5-2b/
+│   └── deepseek-r1-1.5b/
+│       ├── baseline/
+│       └── finetuned/
 └── lora_config.yaml             # training hyperparams (shared; model path from config)
 ```
 
@@ -616,7 +606,7 @@ qwen-finetune/
 
 ## Bottom Line
 
-- **Feasible?** Yes. M4 + Qwen 3.5 (0.8B or 2B) + MLX LoRA is well-trodden; expect sub-hour training runs.
+- **Feasible?** Yes. M4 + DeepSeek-R1-Distill-Qwen-1.5B + MLX LoRA is well-trodden; expect sub-hour training runs.
 - **Swappable?** Yes. One `config.yaml` change swaps model, adapters, traces, and results — no script rewrites.
 - **Worth doing?** Yes as a learning project — covers data pipelines, compression, SFT, and benchmark eval.
 - **Fair comparison?** Yes — SFT is style-only on unrelated data; GSM8K/ARC eval is OOD for both base and fine-tuned.

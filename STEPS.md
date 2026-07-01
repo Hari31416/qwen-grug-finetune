@@ -2,7 +2,7 @@
 
 Actionable checklist for the Grug reasoning fine-tune project. Background and rationale live in [PLAN.md](./PLAN.md).
 
-**Target model:** Qwen 3.5 0.8B (fallback: 2B via `config.yaml`)  
+**Target model:** DeepSeek-R1-Distill-Qwen-1.5B (`mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit`)  
 **Training:** LoRA on MLX (Mac M4)  
 **SFT:** 1,000 general-purpose prompts → 900 train / 100 valid  
 **Eval:** GSM8K test (Week 1), ARC-Challenge eval (Week 2) — never used for training
@@ -23,7 +23,7 @@ Scaffold → Inference + tiny LoRA smoke test → Style guide → Sample prompts
 
 - [x] Python 3.10+ installed
 - [x] ~10 GB free disk (model weights + data)
-- [x] OpenAI API credentials ready (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`)
+- [x] OpenAI-compatible API credentials ready (`OPENAI_API_KEY`, `OPENAI_API_BASE`, `OPENAI_MODEL`)
 - [x] Hugging Face access for datasets (`huggingface-cli login` if needed)
 
 **Verify Apple Silicon MLX:**
@@ -93,7 +93,7 @@ mlx_lm.generate \
 - [x] Document moderate terse rules (fragments, continuous paragraph format, no meta, keep logic steps)
 - [x] Document compression quality bar (logic preserved, fewer tokens, reasoning-only output)
 
-**Milestone:** `style_guide.md` is ready to paste into `compress_traces.py` system prompt.
+**Milestone:** `style_guide.md` is loaded at runtime by `compress_traces.py` as the compressor system prompt.
 
 ---
 
@@ -131,24 +131,24 @@ Build scripts in this order:
 
 | Step | Script               | Input → Output                                     |
 | ---- | -------------------- | -------------------------------------------------- |
-| 5a   | `generate_traces.py` | prompts → `data/raw/qwen3.5-0.8b/traces.jsonl`     |
+| 5a   | `generate_traces.py` | prompts → `data/raw/deepseek-r1-1.5b/traces.jsonl` |
 | 5b   | `compress_traces.py` | raw traces → `data/compressed/traces.jsonl`        |
 | 5c   | `validate_traces.py` | compressed → pass/reject + stats                   |
 | 5d   | `format_data.py`     | validated → `data/train.jsonl`, `data/valid.jsonl` |
 
 **Pilot run:**
 
-- [ ] Take first 10 prompts from `data/sft/prompts.jsonl`
-- [ ] Generate raw CoT locally (Qwen 0.8B, thinking on)
-- [ ] Parse raw thinking and final answer
-- [ ] Validate raw final answer against the source dataset's ground truth
-- [ ] Compress via OpenAI using `style_guide.md`
-- [ ] Auto-reject raw answer mismatches, compressions that drop logic steps or restate the final answer, and unparseable rows
+- [x] Take first 10 prompts from `data/sft/prompts.jsonl`
+- [x] Generate raw CoT locally (DeepSeek-R1 1.5B, thinking on)
+- [x] Parse raw thinking and final answer
+- [x] Validate raw final answer against the source dataset's ground truth
+- [x] Compress via OpenAI-compatible API using `style_guide.md`
+- [x] Auto-reject raw answer mismatches, compressions that drop logic steps or restate the final answer, and unparseable rows
 - [ ] Manually review 5 compressions — check logic preserved, Grug style consistent
-- [ ] Format to MLX chat template with visible `<think>...</think>` tokens and required chat delimiters
-- [ ] Fix any bugs in parsing, chat template, or API prompt
+- [x] Format to MLX chat template with visible `<think>...</think>` tokens and required chat delimiters
+- [x] Fix any bugs in parsing, chat template, or API prompt
 
-**Milestone:** 10 valid, ground-truth-correct rows in `data/train.jsonl` format; pipeline runs without errors.
+**Milestone:** Pipeline runs end-to-end without errors; accepted rows written to `data/train.jsonl` / `data/valid.jsonl`.
 
 ---
 
@@ -182,7 +182,7 @@ Build scripts in this order:
   - Format compliance (parseable `<think>` block + final answer)
 - [ ] Run base model with normal prompt (adapter off)
 - [ ] Run base model with explicit Grug prompt (adapter off)
-- [ ] Save results → `results/qwen3.5-0.8b/baseline/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
+- [ ] Save results → `results/deepseek-r1-1.5b/baseline/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
 
 ```bash
 python scripts/eval.py --benchmark gsm8k --split test
@@ -202,7 +202,7 @@ python scripts/eval.py --benchmark gsm8k --split test
   ```bash
   mlx_lm.lora \
     --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit \
-    --adapter-path adapters/qwen3.5-0.8b \
+    --adapter-path adapters/deepseek-r1-1.5b \
     --train \
     --data ./data \
     --iters 800 \
@@ -213,7 +213,7 @@ python scripts/eval.py --benchmark gsm8k --split test
 - [ ] Watch valid loss; stop early if overfitting
 - [ ] Optional: `mlx_lm.fuse` for easier inference
 
-**Milestone:** Adapter saved in `adapters/qwen3.5-0.8b/`.
+**Milestone:** Adapter saved in `adapters/deepseek-r1-1.5b/`.
 
 ---
 
@@ -225,7 +225,7 @@ python scripts/eval.py --benchmark gsm8k --split test
 - [ ] Evaluate both prompt modes:
   - fine-tuned / normal prompt
   - fine-tuned / Grug prompt
-- [ ] Save → `results/qwen3.5-0.8b/finetuned/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
+- [ ] Save → `results/deepseek-r1-1.5b/finetuned/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
 - [ ] Compare side by side:
 
   | Metric                    | Base normal | Base Grug prompt | FT normal | FT Grug prompt |
@@ -327,7 +327,7 @@ python scripts/eval.py --benchmark gsm8k --split test --adapter --prompt-style g
 | 2   | MLX smoke test                    | ☑      |
 | 3   | Style guide                       | ☑      |
 | 4   | Sample 1k prompts                 | ☑      |
-| 5   | Pilot pipeline (10)               | ☐      |
+| 5   | Pilot pipeline (10)               | ☑      |
 | 6   | Full pipeline (1k)                | ☐      |
 | 7   | GSM8K baseline                    | ☐      |
 | 8   | LoRA training                     | ☐      |
@@ -338,6 +338,4 @@ python scripts/eval.py --benchmark gsm8k --split test --adapter --prompt-style g
 
 ## What to do right now
 
-Start with **Phases 1 → 2 → 3** in one session (~half day). Then **Phase 5 pilot (10 rows)** before scaling to 1k.
-
-Do **not** skip the pilot — format bugs, thinking-token parsing, and compression quality issues are cheapest to fix on 10 examples.
+Start with **Phase 6 full pipeline (1k rows)**. Manual spot-check ~100 accepted compressions before first LoRA training run.

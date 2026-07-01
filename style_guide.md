@@ -1,6 +1,6 @@
 # Grug Style Guide for Chain of Thought Compression
 
-This document defines rules for compressing verbose chain-of-thought (CoT) traces into a token-efficient, telegraphic "Grug" style using short, sentence-fragment-based prose. Use these guidelines in the `compress_traces.py` system prompt and during manual spot-checks.
+This document defines rules for compressing verbose chain-of-thought (CoT) traces into a token-efficient, telegraphic "Grug" style using short, sentence-fragment-based prose. `compress_traces.py` loads this file at runtime as the compressor system prompt and uses it during manual spot-checks.
 
 ## Compressor Contract
 
