@@ -2,6 +2,8 @@
 
 Fine-tune Qwen 3.5 models on Apple Silicon using MLX to learn telegraphic, token-efficient Grug style chain-of-thought reasoning without sacrificing task accuracy.
 
+> This project is WIP. Right now, we have completed phase 2.
+
 ## Project Structure
 
 The project has the following directory layout:
