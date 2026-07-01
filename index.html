@@ -1025,6 +1025,55 @@
         .toast.error {
             background: #ef4444;
         }
+
+        /* Evaluation Table & Comparative UI */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        th {
+            font-family: var(--font-title);
+            font-weight: 600;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            font-size: 0.875rem;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .delta-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+            display: inline-block;
+        }
+
+        .delta-positive {
+            background: var(--accent-green-glow);
+            color: var(--accent-green);
+        }
+
+        .delta-negative {
+            background: var(--accent-red-glow);
+            color: var(--accent-red);
+        }
     </style>
 </head>
 
@@ -1045,13 +1094,15 @@
                     Trace Explorer</button>
                 <button class="tab-btn" data-tab="analytics" id="nav-analytics-btn"><i
                         class="fa-solid fa-chart-line"></i> Analytics</button>
+                <button class="tab-btn" data-tab="results" id="nav-results-btn"><i class="fa-solid fa-square-poll-vertical"></i>
+                    Evaluation</button>
                 <button class="tab-btn" data-tab="styleguide"><i class="fa-solid fa-book-open"></i> Style Guide</button>
             </div>
 
             <!-- Folder Uploader Input -->
             <input type="file" id="folder-upload-input" webkitdirectory directory multiple style="display: none;">
             <button class="upload-trigger" id="upload-btn">
-                <i class="fa-solid fa-folder-open"></i> Select data Folder
+                <i class="fa-solid fa-folder-open"></i> Select Workspace Folder
             </button>
         </div>
     </header>
@@ -1062,14 +1113,14 @@
             <div class="welcome-icon-wrapper">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
             </div>
-            <h2 class="welcome-title">Load Pipeline Datasets</h2>
+            <h2 class="welcome-title">Load Pipeline Workspace</h2>
             <p class="welcome-desc">
-                Select your project's <code>data</code> folder (or drag and drop it here). We will load SFT prompts, raw
-                traces, compressed traces, and training splits to let you inspect them interactively.
+                Select your project's workspace folder (or drag and drop it here). We will load SFT prompts, raw/compressed traces,
+                training splits, and evaluation results to let you inspect them.
             </p>
             <div class="welcome-buttons">
                 <button class="btn btn-primary" id="welcome-upload-btn">
-                    <i class="fa-solid fa-folder-open"></i> Select data/ folder
+                    <i class="fa-solid fa-folder-open"></i> Select Workspace Folder
                 </button>
                 <button class="btn btn-secondary" id="welcome-demo-btn">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Load Demo Data
@@ -1377,6 +1428,138 @@
             </div>
         </div>
 
+        <!-- Tab 5: Evaluation & Benchmarks Panel -->
+        <div id="results-tab" class="view-panel">
+            <div class="style-guide-card" style="margin-bottom: 2rem;">
+                <h3 class="card-title"><i class="fa-solid fa-gauge-high"></i> SFT Benchmark Performance (GSM8K & ARC)</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">
+                    This section compares the baseline (pre-training) model against the fine-tuned model (post-training) using
+                    different prompt styles. Toggling between "Normal prompt" and Grug-themed instruction sets shows the impact
+                    of both prompt-only techniques and LoRA fine-tuning.
+                </p>
+                <div style="overflow-x: auto; margin-top: 1rem;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;"
+                        id="eval-comparison-table">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--card-border); color: var(--accent-color);">
+                                <th style="padding: 0.75rem;">Run Name / Config</th>
+                                <th style="padding: 0.75rem; text-align: center;">Accuracy</th>
+                                <th style="padding: 0.75rem; text-align: center;">Format Compliance</th>
+                                <th style="padding: 0.75rem; text-align: center;">Avg thinking Tokens</th>
+                                <th style="padding: 0.75rem; text-align: center;">Avg Answer Tokens</th>
+                                <th style="padding: 0.75rem; text-align: center;">Avg Latency</th>
+                                <th style="padding: 0.75rem; text-align: center;">Avg Tokens/s</th>
+                                <th style="padding: 0.75rem; text-align: center;">Samples</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eval-comparison-rows">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        
+            <!-- Visual comparison charts -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                <div class="card" style="min-height: 350px;">
+                    <h3 class="card-title">Accuracy Comparison</h3>
+                    <div
+                        style="position: relative; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;">
+                        <canvas id="chart-eval-accuracy" style="max-height: 280px;"></canvas>
+                    </div>
+                </div>
+                <div class="card" style="min-height: 350px;">
+                    <h3 class="card-title">Avg thinking Length (Tokens)</h3>
+                    <div
+                        style="position: relative; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;">
+                        <canvas id="chart-eval-tokens" style="max-height: 280px;"></canvas>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Result Explorer -->
+            <div class="explorer-layout">
+                <div class="explorer-sidebar" style="height: 600px;">
+                    <div class="filter-group">
+                        <label class="filter-label">Select Evaluation Run</label>
+                        <select class="select-input" id="eval-select-run">
+                            <option value="none">No Runs Loaded</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Search Questions</label>
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="eval-search-question" placeholder="Search questions...">
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Filter Correctness</label>
+                        <select class="select-input" id="eval-filter-correctness">
+                            <option value="all">All Answers</option>
+                            <option value="correct">Correct Only</option>
+                            <option value="incorrect">Incorrect Only</option>
+                        </select>
+                    </div>
+                    <div class="items-list" id="eval-items-list" style="height: calc(100% - 220px); overflow-y: auto;">
+                        <!-- Questions list loaded dynamically -->
+                    </div>
+                </div>
+                <div class="explorer-content" style="height: 600px; overflow-y: auto;">
+                    <div class="detail-empty" id="eval-detail-empty">
+                        <i class="fa-solid fa-clipboard-question"></i>
+                        <span>Select a question from the sidebar to inspect the model's output</span>
+                    </div>
+                    <div class="detail-panel" id="eval-detail-panel" style="display: none;">
+                        <div class="detail-header">
+                            <div class="detail-header-left">
+                                <span class="detail-title">Evaluation Sample Detail</span>
+                                <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
+                                    <span class="item-id" id="eval-det-id">Run ID #1</span>
+                                    <span class="badge" id="eval-det-correctness">Correct</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="inspect-card">
+                            <span class="inspect-card-title">GSM8K Benchmark Question</span>
+                            <div class="code-block" id="eval-det-question"
+                                style="font-family: var(--font-main); font-size: 0.95rem; white-space: pre-wrap;">Question text
+                            </div>
+                            <div
+                                style="display: flex; gap: 1.5rem; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem;">
+                                <div><span style="color: var(--text-secondary);">Ground Truth:</span> <strong
+                                        style="color: var(--accent-green);" id="eval-det-gt">18</strong></div>
+                                <div><span style="color: var(--text-secondary);">Predicted Answer:</span> <strong
+                                        style="color: var(--accent-color);" id="eval-det-pred">18</strong></div>
+                            </div>
+                        </div>
+                        <div class="inspect-card">
+                            <span class="inspect-card-title">Model Generation Output</span>
+                            <div class="thinking-bubble" id="eval-det-think-bubble" style="margin-bottom: 1rem;">
+                                <div class="thinking-bubble-title"><i class="fa-solid fa-lightbulb"></i> thinking Process</div>
+                                <div id="eval-det-thinking" style="white-space: pre-wrap;">Thinking trace...</div>
+                            </div>
+                            <div class="code-block" id="eval-det-answer" style="white-space: pre-wrap;">Final answer text...
+                            </div>
+                            <div
+                                style="display: flex; gap: 1.5rem; font-size: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem; color: var(--text-muted); margin-top: 1rem;">
+                                <div>thinking Tokens: <strong id="eval-det-think-tok"
+                                        style="color: var(--accent-color);">0</strong></div>
+                                <div>Answer Tokens: <strong id="eval-det-ans-tok" style="color: var(--accent-color);">0</strong>
+                                </div>
+                                <div>Total Tokens: <strong id="eval-det-tot-tok" style="color: var(--accent-color);">0</strong>
+                                </div>
+                                <div>Latency: <strong id="eval-det-latency" style="color: var(--accent-color);">0s</strong>
+                                </div>
+                                <div>Speed: <strong id="eval-det-speed" style="color: var(--accent-color);">0 tok/s</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Tab 4: Style Guide Panel -->
         <div id="styleguide-tab" class="view-panel">
             <div style="display: flex; flex-direction: column; gap: 2rem;">
@@ -1510,6 +1693,10 @@
 
     <!-- Javascript Pipeline Logic -->
     <script>
+        // PRELOADED_DATA_START
+        const PRELOADED_WORKSPACE_DATA = null;
+        // PRELOADED_DATA_END
+
         // State variables
         let pipelineData = {
             prompts: {},        // id -> promptObj
@@ -1518,6 +1705,7 @@
             validatedTraces: {},  // id -> validatedObj
             sftFormatted: [],   // list of formatted rows
             validationReport: null,
+            results: {},        // runId -> { summary, results, metadata }
             sources: new Set(),
             isDemo: false
         };
@@ -1531,6 +1719,7 @@
         const overviewTab = document.getElementById('overview-tab');
         const explorerTab = document.getElementById('explorer-tab');
         const analyticsTab = document.getElementById('analytics-tab');
+                                const resultsTab = document.getElementById('results-tab');
         const styleguideTab = document.getElementById('styleguide-tab');
 
         const folderUploadInput = document.getElementById('folder-upload-input');
@@ -1597,6 +1786,9 @@
                     analyticsTab.classList.add('active');
                     // Draw or redraw charts
                     setTimeout(renderCharts, 50);
+                } else if (targetTab === 'results') {
+                    resultsTab.classList.add('active');
+                    setTimeout(renderResultsUI, 50);
                 } else if (targetTab === 'styleguide') {
                     styleguideTab.classList.add('active');
                 }
@@ -1647,6 +1839,9 @@
                     }
                 } else if (path.endsWith('train.jsonl') || path.endsWith('valid.jsonl')) {
                     parseSftFormattedJsonl(fileContent, path.endsWith('train.jsonl') ? 'train' : 'valid');
+                    filesFoundCount++;
+                } else if (path.endsWith('.json') && !path.includes('validation_report.json')) {
+                    parseResultsJson(fileContent, path);
                     filesFoundCount++;
                 }
             }
@@ -1738,6 +1933,9 @@
                 } else if (path.endsWith('train.jsonl') || path.endsWith('valid.jsonl')) {
                     parseSftFormattedJsonl(fileContent, path.endsWith('train.jsonl') ? 'train' : 'valid');
                     filesLoaded++;
+                } else if (path.endsWith('.json') && !path.includes('validation_report.json')) {
+                    parseResultsJson(fileContent, path);
+                    filesLoaded++;
                 }
             }
 
@@ -1777,11 +1975,66 @@
                 validatedTraces: {},
                 sftFormatted: [],
                 validationReport: null,
+                results: {},
                 sources: new Set(),
                 isDemo: false
             };
             selectedItemId = null;
         }
+
+                            function parseResultsJson(content, path) {
+                                try {
+                                    const data = JSON.parse(content);
+                                    if (!data.summary || !data.results) {
+                                        console.warn("Invalid results file structure at:", path);
+                                        return;
+                                    }
+
+                                    // Parse path to extract run details
+                                    let model = "deepseek-r1-1.5b";
+                                    let runType = "baseline";
+                                    let benchmark = "gsm8k";
+                                    let promptStyle = "normal";
+
+                                    const normalizedPath = path.replace(/\\/g, '/');
+                                    const parts = normalizedPath.split('/');
+                                    if (parts.length >= 4) {
+                                        model = parts[parts.length - 3];
+                                        runType = parts[parts.length - 2];
+                                        const fileName = parts[parts.length - 1];
+                                        const nameParts = fileName.replace('.json', '').split('_');
+                                        benchmark = nameParts[0];
+                                        if (nameParts.length > 1) {
+                                            promptStyle = nameParts.slice(1).join('_');
+                                        }
+                                    } else {
+                                        const fileName = parts[parts.length - 1];
+                                        if (fileName.includes('grug_prompt')) {
+                                            promptStyle = 'grug_prompt';
+                                        }
+                                        if (fileName.includes('normal')) {
+                                            promptStyle = 'normal';
+                                        }
+                                        if (normalizedPath.includes('finetuned')) {
+                                            runType = 'finetuned';
+                                        }
+                                        if (fileName.includes('arc')) {
+                                            benchmark = 'arc';
+                                        }
+                                    }
+
+                                    const runId = `${model}-${runType}-${benchmark}_${promptStyle}`;
+                                    pipelineData.results[runId] = {
+                                        summary: data.summary,
+                                        results: data.results,
+                                        metadata: { model, runType, benchmark, promptStyle }
+                                    };
+
+                                    console.log(`Parsed run ID: ${runId}`);
+                                } catch (err) {
+                                    console.error("Error parsing results JSON:", err);
+                                }
+                            }
 
         // File Parsers
         function parsePromptsJsonl(content) {
@@ -1856,6 +2109,9 @@
 
             // Render Explorer Grid
             renderExplorerItems();
+
+            // Prepare Evaluation UI
+            renderResultsUI();
 
             // Auto click first item in explorer if available
             const firstRow = explorerItemsList.querySelector('.item-row');
@@ -1983,6 +2239,11 @@
         filterSource.addEventListener('change', renderExplorerItems);
         filterStatus.addEventListener('change', renderExplorerItems);
         explorerSearch.addEventListener('input', renderExplorerItems);
+
+                        // Evaluation Filters listeners
+                        document.getElementById('eval-select-run').addEventListener('change', renderEvalItems);
+                        document.getElementById('eval-search-question').addEventListener('input', renderEvalItems);
+                        document.getElementById('eval-filter-correctness').addEventListener('change', renderEvalItems);
 
         // Render Sidebar List
         function renderExplorerItems() {
@@ -2267,6 +2528,349 @@
             }, 3000);
         }
 
+                            // Render Evaluation Results tab UI
+                            function renderResultsUI() {
+                                const runSelect = document.getElementById('eval-select-run');
+                                const currentSelected = runSelect.value;
+                                runSelect.innerHTML = '';
+
+                                const loadedRunIds = Object.keys(pipelineData.results);
+                                if (loadedRunIds.length === 0) {
+                                    runSelect.innerHTML = '<option value="none">No Runs Loaded</option>';
+                                } else {
+                                    loadedRunIds.forEach(runId => {
+                                        const opt = document.createElement('option');
+                                        opt.value = runId;
+                                        const parts = runId.split('-');
+                                        const model = parts[0] + (parts[1] ? '-' + parts[1] : '');
+                                        const runType = parts[parts.length - 2] || "";
+                                        const rest = parts[parts.length - 1] || "";
+                                        const restParts = rest.split('_');
+                                        const benchmark = restParts[0] || "";
+                                        const style = restParts.slice(1).join(' ') || "";
+                                        opt.textContent = `${model.toUpperCase()} | ${runType.toUpperCase()} | ${benchmark.toUpperCase()} (${style})`;
+                                        runSelect.appendChild(opt);
+                                    });
+
+                                    if (loadedRunIds.includes(currentSelected)) {
+                                        runSelect.value = currentSelected;
+                                    } else {
+                                        runSelect.value = loadedRunIds[0];
+                                    }
+                                }
+
+                                const tbody = document.getElementById('eval-comparison-rows');
+                                tbody.innerHTML = '';
+
+                                const benchmarks = ['gsm8k', 'arc'];
+                                const models = ['deepseek-r1-1.5b'];
+
+                                models.forEach(model => {
+                                    benchmarks.forEach(benchmark => {
+                                        const configs = [
+                                            { runType: 'baseline', style: 'normal', name: 'Base / Normal Prompt' },
+                                            { runType: 'baseline', style: 'grug_prompt', name: 'Base / Grug Prompt' },
+                                            { runType: 'finetuned', style: 'normal', name: 'Fine-Tuned / Normal Prompt' },
+                                            { runType: 'finetuned', style: 'grug_prompt', name: 'Fine-Tuned / Grug Prompt' }
+                                        ];
+
+                                        const hasAnyRun = configs.some(c => pipelineData.results[`${model}-${c.runType}-${benchmark}_${c.style}`]);
+                                        if (!hasAnyRun && benchmark !== 'gsm8k') return;
+
+                                        const headerRow = document.createElement('tr');
+                                        headerRow.style = 'background: rgba(255, 255, 255, 0.02); border-bottom: 2px solid var(--card-border);';
+                                        headerRow.innerHTML = `<td colspan="8" style="font-weight: 700; color: var(--accent-color); padding: 0.5rem 1rem;">Benchmark: ${benchmark.toUpperCase()} (${model.toUpperCase()})</td>`;
+                                        tbody.appendChild(headerRow);
+
+                                        const baselineNormalId = `${model}-baseline-${benchmark}_normal`;
+                                        const baseNormalRun = pipelineData.results[baselineNormalId];
+
+                                        configs.forEach(c => {
+                                            const runId = `${model}-${c.runType}-${benchmark}_${c.style}`;
+                                            const run = pipelineData.results[runId];
+                                            const tr = document.createElement('tr');
+
+                                            if (run) {
+                                                const sum = run.summary;
+                                                const acc = (sum.accuracy * 100).toFixed(1) + '%';
+                                                const compliance = sum.format_compliance_rate !== undefined
+                                                    ? (sum.format_compliance_rate * 100).toFixed(1) + '%'
+                                                    : 'N/A';
+
+                                                let accDeltaHTML = '';
+                                                let tokDeltaHTML = '';
+                                                if (baseNormalRun && runId !== baselineNormalId) {
+                                                    const accDiff = (sum.accuracy - baseNormalRun.summary.accuracy) * 100;
+                                                    const accSign = accDiff >= 0 ? '+' : '';
+                                                    const accClass = accDiff >= 0 ? 'delta-positive' : 'delta-negative';
+                                                    accDeltaHTML = `<span class="delta-badge ${accClass}">${accSign}${accDiff.toFixed(0)}%</span>`;
+
+                                                    const tokDiff = sum.mean_thinking_tokens - baseNormalRun.summary.mean_thinking_tokens;
+                                                    const tokPct = (tokDiff / baseNormalRun.summary.mean_thinking_tokens * 100);
+                                                    const tokSign = tokPct >= 0 ? '+' : '';
+                                                    const tokClass = tokPct <= 0 ? 'delta-positive' : 'delta-negative';
+                                                    tokDeltaHTML = `<span class="delta-badge ${tokClass}">${tokSign}${tokPct.toFixed(0)}%</span>`;
+                                                }
+
+                                                tr.innerHTML = `
+                                <td style="font-weight: 600; padding: 0.75rem 1rem;">${c.name}</td>
+                                <td style="text-align: center; font-weight: 600; color: var(--text-primary);">${acc}${accDeltaHTML}</td>
+                                <td style="text-align: center; color: var(--text-secondary);">${compliance}</td>
+                                <td style="text-align: center; color: var(--accent-yellow); font-family: var(--font-code);">${Math.round(sum.mean_thinking_tokens)}${tokDeltaHTML}</td>
+                                <td style="text-align: center; color: var(--text-secondary); font-family: var(--font-code);">${Math.round(sum.mean_answer_tokens)}</td>
+                                <td style="text-align: center; color: var(--text-secondary);">${sum.mean_latency ? sum.mean_latency.toFixed(2) + 's' : 'N/A'}</td>
+                                <td style="text-align: center; color: var(--text-secondary); font-family: var(--font-code);">${sum.mean_tokens_per_second ? Math.round(sum.mean_tokens_per_second) : 'N/A'}</td>
+                                <td style="text-align: center; color: var(--text-muted);">${sum.sample_count}</td>
+                            `;
+                                            } else {
+                                                tr.style = 'opacity: 0.5;';
+                                                tr.innerHTML = `
+                                <td style="font-weight: 600; padding: 0.75rem 1rem; color: var(--text-muted);">${c.name}</td>
+                                <td colspan="7" style="text-align: center; color: var(--text-muted); font-style: italic;">
+                                    <span class="badge badge-yellow">Not Loaded / Pending Pipeline Run</span>
+                                </td>
+                            `;
+                                            }
+                                            tbody.appendChild(tr);
+                                        });
+                                    });
+                                });
+
+                                renderEvalCharts();
+                                renderEvalItems();
+                            }
+
+                            function renderEvalCharts() {
+                                if (chartInstances.evalAccuracy) chartInstances.evalAccuracy.destroy();
+                                if (chartInstances.evalTokens) chartInstances.evalTokens.destroy();
+
+                                const benchmarks = ['gsm8k', 'arc'];
+                                const runsConfig = [
+                                    { runType: 'baseline', style: 'normal', name: 'Base Normal' },
+                                    { runType: 'baseline', style: 'grug_prompt', name: 'Base Grug' },
+                                    { runType: 'finetuned', style: 'normal', name: 'FT Normal' },
+                                    { runType: 'finetuned', style: 'grug_prompt', name: 'FT Grug' }
+                                ];
+
+                                const accuracyDatasets = [];
+                                const tokensDatasets = [];
+
+                                const colors = {
+                                    gsm8k: { bg: 'rgba(59, 130, 246, 0.5)', border: '#3b82f6' },
+                                    arc: { bg: 'rgba(139, 92, 246, 0.5)', border: '#8b5cf6' }
+                                };
+
+                                benchmarks.forEach(bench => {
+                                    const accData = [];
+                                    const tokData = [];
+                                    let hasAny = false;
+
+                                    runsConfig.forEach(cfg => {
+                                        const runId = `deepseek-r1-1.5b-${cfg.runType}-${bench}_${cfg.style}`;
+                                        const run = pipelineData.results[runId];
+                                        if (run) {
+                                            accData.push(run.summary.accuracy * 100);
+                                            tokData.push(run.summary.mean_thinking_tokens);
+                                            hasAny = true;
+                                        } else {
+                                            accData.push(0);
+                                            tokData.push(0);
+                                        }
+                                    });
+
+                                    if (hasAny) {
+                                        accuracyDatasets.push({
+                                            label: bench.toUpperCase(),
+                                            data: accData,
+                                            backgroundColor: colors[bench].bg,
+                                            borderColor: colors[bench].border,
+                                            borderWidth: 1.5,
+                                            borderRadius: 4
+                                        });
+
+                                        tokensDatasets.push({
+                                            label: bench.toUpperCase(),
+                                            data: tokData,
+                                            backgroundColor: colors[bench].bg,
+                                            borderColor: colors[bench].border,
+                                            borderWidth: 1.5,
+                                            borderRadius: 4
+                                        });
+                                    }
+                                });
+
+                                if (accuracyDatasets.length === 0) return;
+
+                                const labels = runsConfig.map(c => c.name);
+
+                                const ctxAcc = document.getElementById('chart-eval-accuracy').getContext('2d');
+                                chartInstances.evalAccuracy = new Chart(ctxAcc, {
+                                    type: 'bar',
+                                    data: { labels, datasets: accuracyDatasets },
+                                    options: {
+                                        responsive: true,
+                                        scales: {
+                                            y: { min: 0, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                                            x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+                                        },
+                                        plugins: {
+                                            legend: { labels: { color: '#9ca3af' } }
+                                        }
+                                    }
+                                });
+
+                                const ctxTok = document.getElementById('chart-eval-tokens').getContext('2d');
+                                chartInstances.evalTokens = new Chart(ctxTok, {
+                                    type: 'bar',
+                                    data: { labels, datasets: tokensDatasets },
+                                    options: {
+                                        responsive: true,
+                                        scales: {
+                                            y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                                            x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+                                        },
+                                        plugins: {
+                                            legend: { labels: { color: '#9ca3af' } }
+                                        }
+                                    }
+                                });
+                            }
+
+                            let selectedEvalItemId = null;
+
+                            function renderEvalItems() {
+                                const runSelect = document.getElementById('eval-select-run');
+                                const runId = runSelect.value;
+
+                                const listContainer = document.getElementById('eval-items-list');
+                                listContainer.innerHTML = '';
+
+                                if (runId === 'none' || !pipelineData.results[runId]) {
+                                    listContainer.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 2rem; font-size: 0.85rem;">No evaluation runs loaded.</div>';
+                                    document.getElementById('eval-detail-empty').style.display = 'flex';
+                                    document.getElementById('eval-detail-panel').style.display = 'none';
+                                    return;
+                                }
+
+                                const runData = pipelineData.results[runId];
+                                const searchVal = document.getElementById('eval-search-question').value.toLowerCase().trim();
+                                const correctnessVal = document.getElementById('eval-filter-correctness').value;
+
+                                let matched = [];
+                                runData.results.forEach(item => {
+                                    const questionText = item.question || "";
+                                    const isCorrect = item.correct === true;
+                                    const isIncorrect = item.correct === false;
+
+                                    if (searchVal && !questionText.toLowerCase().includes(searchVal) && !String(item.id).includes(searchVal)) {
+                                        return;
+                                    }
+
+                                    if (correctnessVal === 'correct' && !isCorrect) return;
+                                    if (correctnessVal === 'incorrect' && !isIncorrect) return;
+
+                                    matched.push(item);
+                                });
+
+                                matched.sort((a, b) => a.id - b.id);
+
+                                matched.forEach(item => {
+                                    const row = document.createElement('div');
+                                    row.className = `item-row ${selectedEvalItemId === item.id ? 'selected' : ''}`;
+                                    row.dataset.id = item.id;
+
+                                    const correctnessBadge = item.correct
+                                        ? '<span class="badge badge-green"><i class="fa-solid fa-check"></i></span>'
+                                        : '<span class="badge badge-red"><i class="fa-solid fa-xmark"></i></span>';
+
+                                    const formatBadge = item.format_compliance === false
+                                        ? '<span class="badge badge-yellow">Format Fail</span>'
+                                        : '';
+
+                                    row.innerHTML = `
+                    <div class="item-meta">
+                        <span class="item-id">ID: ${item.id}</span>
+                        <span style="font-family: var(--font-code); font-size: 0.7rem; color: var(--accent-yellow);">${item.thinking_tokens} tok</span>
+                    </div>
+                    <div class="item-prompt-preview">${escapeHtml(item.question)}</div>
+                    <div class="item-badges">${correctnessBadge} ${formatBadge}</div>
+                `;
+
+                                    row.addEventListener('click', () => {
+                                        listContainer.querySelectorAll('.item-row').forEach(r => r.classList.remove('selected'));
+                                        row.classList.add('selected');
+                                        selectedEvalItemId = item.id;
+                                        showEvalDetailPanel(runId, item.id);
+                                    });
+
+                                    listContainer.appendChild(row);
+                                });
+
+                                if (matched.length === 0) {
+                                    listContainer.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 2rem; font-size: 0.85rem;">No items match selected filters.</div>';
+                                } else {
+                                    const firstRow = listContainer.querySelector('.item-row');
+                                    if (firstRow) {
+                                        const exists = matched.some(m => m.id === selectedEvalItemId);
+                                        if (!exists) {
+                                            firstRow.click();
+                                        } else {
+                                            const selRow = listContainer.querySelector(`.item-row[data-id="${selectedEvalItemId}"]`);
+                                            if (selRow) selRow.classList.add('selected');
+                                        }
+                                    }
+                                }
+                            }
+
+                            function showEvalDetailPanel(runId, itemId) {
+                                const runData = pipelineData.results[runId];
+                                if (!runData) return;
+
+                                const item = runData.results.find(r => r.id === itemId);
+                                if (!item) return;
+
+                                document.getElementById('eval-detail-empty').style.display = 'none';
+                                document.getElementById('eval-detail-panel').style.display = 'flex';
+
+                                document.getElementById('eval-det-id').textContent = `ID #${item.id} (Run: ${runId})`;
+
+                                const badge = document.getElementById('eval-det-correctness');
+                                if (item.correct) {
+                                    badge.className = "badge badge-green";
+                                    badge.textContent = "Correct Answer";
+                                } else {
+                                    badge.className = "badge badge-red";
+                                    badge.textContent = "Incorrect Answer";
+                                }
+
+                                document.getElementById('eval-det-question').textContent = item.question;
+                                document.getElementById('eval-det-gt').textContent = item.ground_truth;
+                                document.getElementById('eval-det-pred').textContent = item.predicted_answer || 'N/A';
+
+                                if (item.thinking_content) {
+                                    document.getElementById('eval-det-think-bubble').style.display = 'block';
+                                    document.getElementById('eval-det-thinking').textContent = item.thinking_content;
+                                } else {
+                                    document.getElementById('eval-det-think-bubble').style.display = 'none';
+                                }
+
+                                if (item.answer_content) {
+                                    document.getElementById('eval-det-answer').style.display = 'block';
+                                    document.getElementById('eval-det-answer').textContent = item.answer_content;
+                                } else if (item.output) {
+                                    document.getElementById('eval-det-answer').style.display = 'block';
+                                    document.getElementById('eval-det-answer').textContent = item.output;
+                                } else {
+                                    document.getElementById('eval-det-answer').style.display = 'none';
+                                }
+
+                                document.getElementById('eval-det-think-tok').textContent = item.thinking_tokens || 0;
+                                document.getElementById('eval-det-ans-tok').textContent = item.answer_tokens || 0;
+                                document.getElementById('eval-det-tot-tok').textContent = item.total_tokens || 0;
+                                document.getElementById('eval-det-latency').textContent = item.latency_seconds ? item.latency_seconds.toFixed(2) + 's' : 'N/A';
+                                document.getElementById('eval-det-speed').textContent = item.tokens_per_second ? Math.round(item.tokens_per_second) + ' tok/s' : 'N/A';
+                            }
+
         // Load pre-packaged Demo Data
         function loadDemoData() {
             resetDataState();
@@ -2375,6 +2979,115 @@
                     text: "<｜beginofsentence｜><｜User｜>Passage: Me Talk Pretty One Day... Question: is me talk pretty one day an autobiography?<｜Assistant｜><think>\nAutobiography involves writing about life, personal emotions, experiences. Book divided into two parts: Sedaris's life before France (upbringing in Raleigh, NYC) and moving to Normandy with Hugh, facing language barriers. Book covers Sedaris's life experiences, sharing personal journey and thoughts. Essays read on \"This American Life\" indicate personal reflection.\n</think>\n\nyes<｜endofsentence｜>"
                 }
             ];
+
+            // Mock Evaluation Results
+            pipelineData.results['deepseek-r1-1.5b-baseline-gsm8k_normal'] = {
+                summary: {
+                    accuracy: 0.69,
+                    format_compliance_rate: 0.98,
+                    mean_thinking_tokens: 200.39,
+                    mean_answer_tokens: 263.94,
+                    mean_total_tokens: 464.33,
+                    mean_latency: 1.49,
+                    mean_tokens_per_second: 309.99,
+                    sample_count: 100
+                },
+                results: [
+                    {
+                        id: 1,
+                        question: "Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?",
+                        ground_truth: "18",
+                        thinking_content: "First, determine how many eggs Janet starts with each day: 16 eggs.\nShe eats 3 eggs for breakfast every morning, leaving 16 - 3 = 13 eggs.\nShe bakes muffins using 4 eggs, leaving 13 - 4 = 9 eggs.\nShe sells the remaining 9 eggs for $2 each. 9 * 2 = 18.\nTherefore she makes $18.",
+                        answer_content: "Janet makes $18 every day at the farmers' market.",
+                        predicted_answer: "18",
+                        correct: true,
+                        thinking_tokens: 161,
+                        answer_tokens: 229,
+                        total_tokens: 390,
+                        latency_seconds: 1.49,
+                        tokens_per_second: 260.3,
+                        format_compliance: true
+                    },
+                    {
+                        id: 2,
+                        question: "A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total does it take?",
+                        ground_truth: "3",
+                        thinking_content: "Robe takes 2 bolts of blue fiber. White fiber is half of blue, which is 2 / 2 = 1 bolt.\nTotal bolts = 2 blue + 1 white = 3 bolts.",
+                        answer_content: "It takes 3 bolts in total.",
+                        predicted_answer: "3",
+                        correct: true,
+                        thinking_tokens: 77,
+                        answer_tokens: 192,
+                        total_tokens: 269,
+                        latency_seconds: 1.49,
+                        tokens_per_second: 179.5,
+                        format_compliance: true
+                    }
+                ],
+                metadata: { model: 'deepseek-r1-1.5b', runType: 'baseline', benchmark: 'gsm8k', promptStyle: 'normal' }
+            };
+
+            pipelineData.results['deepseek-r1-1.5b-baseline-gsm8k_grug_prompt'] = {
+                summary: {
+                    accuracy: 0.66,
+                    format_compliance_rate: 0.92,
+                    mean_thinking_tokens: 549.3,
+                    mean_answer_tokens: 64.7,
+                    mean_total_tokens: 614.0,
+                    mean_latency: 2.12,
+                    mean_tokens_per_second: 289.0,
+                    sample_count: 100
+                },
+                results: [
+                    {
+                        id: 1,
+                        question: "Janet’s ducks lay 16 eggs per day...",
+                        ground_truth: "18",
+                        thinking_content: "Janet lays 16 eggs. Eats 3. 16 - 3 = 13. Muffins 4. 13 - 4 = 9. Sells 9 for 2. 9 * 2 = 18. Answer 18.",
+                        answer_content: "18",
+                        predicted_answer: "18",
+                        correct: true,
+                        thinking_tokens: 30,
+                        answer_tokens: 10,
+                        total_tokens: 40,
+                        latency_seconds: 0.2,
+                        tokens_per_second: 200,
+                        format_compliance: true
+                    }
+                ],
+                metadata: { model: 'deepseek-r1-1.5b', runType: 'baseline', benchmark: 'gsm8k', promptStyle: 'grug_prompt' }
+            };
+
+            pipelineData.results['deepseek-r1-1.5b-finetuned-gsm8k_normal'] = {
+                summary: {
+                    accuracy: 0.71,
+                    format_compliance_rate: 1.0,
+                    mean_thinking_tokens: 82.5,
+                    mean_answer_tokens: 45.2,
+                    mean_total_tokens: 127.7,
+                    mean_latency: 0.45,
+                    mean_tokens_per_second: 283.7,
+                    sample_count: 100
+                },
+                results: [
+                    {
+                        id: 1,
+                        question: "Janet’s ducks lay 16 eggs per day...",
+                        ground_truth: "18",
+                        thinking_content: "Ducks lay 16. Breakfast 3. Left 13. Muffins 4. Left 9. Sells 9 * 2 = 18.",
+                        answer_content: "18",
+                        predicted_answer: "18",
+                        correct: true,
+                        thinking_tokens: 18,
+                        answer_tokens: 5,
+                        total_tokens: 23,
+                        latency_seconds: 0.1,
+                        tokens_per_second: 230,
+                        format_compliance: true
+                    }
+                ],
+                metadata: { model: 'deepseek-r1-1.5b', runType: 'finetuned', benchmark: 'gsm8k', promptStyle: 'normal' }
+            };
         }
 
         // Render charts
@@ -2520,8 +3233,18 @@
             });
         }
 
-        // Try to pre-load from relative path if hosted
+        // Try to pre-load from relative path if hosted or baked-in
         window.addEventListener('DOMContentLoaded', async () => {
+            // First check if data is baked in directly
+            if (typeof PRELOADED_WORKSPACE_DATA !== 'undefined' && PRELOADED_WORKSPACE_DATA !== null) {
+                console.log("Loading preloaded workspace data from HTML template...");
+                pipelineData = PRELOADED_WORKSPACE_DATA;
+                pipelineData.sources = new Set(pipelineData.sources || []);
+                dataLoadedCallback();
+                showToast("Loaded preloaded workspace data!");
+                return;
+            }
+
             // Check if served over http/https
             if (window.location.protocol.startsWith('http')) {
                 showToast("Served online, attempting to auto-fetch datasets...", "info");
@@ -2570,7 +3293,39 @@
                         parseSftFormattedJsonl(await res.text(), 'valid');
                     }
 
-                    if (Object.keys(pipelineData.prompts).length > 0 || Object.keys(pipelineData.rawTraces).length > 0) {
+                    // Try loading baseline normal results
+                    try {
+                        res = await fetch('results/deepseek-r1-1.5b/baseline/gsm8k_normal.json');
+                        if (res.ok) {
+                            parseResultsJson(await res.text(), 'results/deepseek-r1-1.5b/baseline/gsm8k_normal.json');
+                        }
+                    } catch (e) { }
+
+                    // Try loading baseline grug_prompt results
+                    try {
+                        res = await fetch('results/deepseek-r1-1.5b/baseline/gsm8k_grug_prompt.json');
+                        if (res.ok) {
+                            parseResultsJson(await res.text(), 'results/deepseek-r1-1.5b/baseline/gsm8k_grug_prompt.json');
+                        }
+                    } catch (e) { }
+
+                    // Try loading finetuned normal results
+                    try {
+                        res = await fetch('results/deepseek-r1-1.5b/finetuned/gsm8k_normal.json');
+                        if (res.ok) {
+                            parseResultsJson(await res.text(), 'results/deepseek-r1-1.5b/finetuned/gsm8k_normal.json');
+                        }
+                    } catch (e) { }
+
+                    // Try loading finetuned grug_prompt results
+                    try {
+                        res = await fetch('results/deepseek-r1-1.5b/finetuned/gsm8k_grug_prompt.json');
+                        if (res.ok) {
+                            parseResultsJson(await res.text(), 'results/deepseek-r1-1.5b/finetuned/gsm8k_grug_prompt.json');
+                        }
+                    } catch (e) { }
+
+                    if (Object.keys(pipelineData.prompts).length > 0 || Object.keys(pipelineData.rawTraces).length > 0 || Object.keys(pipelineData.results).length > 0) {
                         dataLoadedCallback();
                         showToast("Auto-fetched local datasets successfully!");
                     }

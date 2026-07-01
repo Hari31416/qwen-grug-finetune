@@ -172,7 +172,7 @@ Build scripts in this order:
 
 **Goal:** Pre-training numbers for base model (no adapter).
 
-- [ ] Implement `scripts/eval.py` for GSM8K test split
+- [x] Implement `scripts/eval.py` for GSM8K test split
 - [ ] Metrics per problem:
   - Accuracy (exact match on numeric answer)
   - Thinking tokens

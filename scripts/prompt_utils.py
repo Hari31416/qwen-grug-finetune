@@ -4,6 +4,9 @@ from typing import List, Optional, Set
 
 def get_answer_format_suffix(source: str, choices: Optional[List[str]] = None) -> str:
     """Return a strict final-answer instruction appended to the user prompt."""
+    if source == "gsm8k":
+        return "\nProvide your final numeric answer at the end."
+
     if source in ("strategyqa", "boolq"):
         return "\nAnswer in exactly one word: yes or no."
 

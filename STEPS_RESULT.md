@@ -204,3 +204,37 @@ Initially, we ran the raw trace generation using the target `Qwen3.5-0.8B-OptiQ-
 
 - **Validation rejections:** Around 13.8% of compressed samples were auto-rejected during `validate_traces.py` due to dropping numeric facts or multiple-choice options. This is a normal and acceptable filter rate that guarantees high training data quality. We decided not to lower the validation bar since 370 samples is a robust set for fine-tuning the 1.5B Qwen model.
 
+## Phase 7 — GSM8K Baseline Evaluation
+
+### What We Did
+
+- Implemented a unified evaluation framework in `scripts/eval.py` to evaluate the model on the GSM8K test split.
+- Configured prompt building for both normal and Grug styles:
+  - Added format-constraint instructions to the user prompt (`\nProvide your final numeric answer at the end.`) for both styles to ensure structured outputs.
+  - Formatted Grug style using the precise system prompt defined in `style_guide.md` to trigger telegraphic thinking blocks.
+- Implemented robust regex-based final answer extraction that:
+  - Extracts from the last `\boxed{...}` block to handle models putting intermediate steps in boxes.
+  - Automatically cleans LaTeX mathematical artifacts, custom spacing flags (like `\!`, `\,`, `\ `), formatting backslashes, and dollar signs.
+  - Falls back to the last extracted digit-sequence if no boxed format is present.
+- Executed a pilot run of 10 samples to verify the script correctness on the base model `DeepSeek-R1-Distill-Qwen-1.5B-4bit` (achieving 50% accuracy on the first 10 questions).
+- Verified results output schema and file storage in the `results/deepseek-r1-1.5b/baseline/` folder.
+
+### Key Commands Run
+
+- Run baseline normal evaluation:
+  ```bash
+  python scripts/eval.py --benchmark gsm8k --split test --limit 1000 --batch-size 16
+  ```
+
+- Run baseline Grug evaluation:
+  ```bash
+  python scripts/eval.py --benchmark gsm8k --split test --prompt-style grug --limit 1000 --batch-size 16
+  ```
+
+### What Worked
+
+- Successful integration with Hugging Face's `datasets` split loader.
+- Validated parser capability to extract exact numbers from complex LaTeX blocks (e.g. converting `\boxed{\$65,\!000}` correctly into `65000` to evaluate correctness).
+- Output files are correctly saved to `results/deepseek-r1-1.5b/baseline/gsm8k_normal.json` and `gsm8k_grug_prompt.json`.
+
+
