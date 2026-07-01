@@ -196,8 +196,8 @@ python scripts/eval.py --benchmark gsm8k --split test
 
 **Goal:** Fine-tune adapter on Grug-style SFT data.
 
-- [ ] Implement `scripts/train.py` (wrapper around `mlx_lm.lora` reading `config.yaml`)
-- [ ] Train with defaults:
+- [x] Implement `scripts/train.py` (wrapper around `mlx_lm.lora` reading `config.yaml`)
+- [x] Train with defaults:
 
   ```bash
   mlx_lm.lora \
@@ -210,8 +210,8 @@ python scripts/eval.py --benchmark gsm8k --split test
     --lora-layers 16
   ```
 
-- [ ] Watch valid loss; stop early if overfitting
-- [ ] Optional: `mlx_lm.fuse` for easier inference
+- [x] Watch valid loss; stop early if overfitting
+- [/] Optional: `mlx_lm.fuse` for easier inference
 
 **Milestone:** Adapter saved in `adapters/deepseek-r1-1.5b/`.
 
@@ -221,19 +221,19 @@ python scripts/eval.py --benchmark gsm8k --split test
 
 **Goal:** Compare base vs fine-tuned on held-out math benchmark.
 
-- [ ] Run `eval.py` with adapter loaded
-- [ ] Evaluate both prompt modes:
+- [x] Run `eval.py` with adapter loaded
+- [x] Evaluate both prompt modes:
   - fine-tuned / normal prompt
   - fine-tuned / Grug prompt
-- [ ] Save → `results/deepseek-r1-1.5b/finetuned/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
-- [ ] Compare side by side:
+- [x] Save → `results/deepseek-r1-1.5b/finetuned/gsm8k_normal.json` and `gsm8k_grug_prompt.json`
+- [x] Compare side by side:
 
   | Metric                    | Base normal | Base Grug prompt | FT normal | FT Grug prompt |
   | ------------------------- | ----------- | ---------------- | --------- | -------------- |
-  | Accuracy                  |             |                  |           |                |
-  | Mean thinking tokens      |             |                  |           |                |
-  | Tokens per correct answer |             |                  |           |                |
-  | Format compliance         |             |                  |           |                |
+  | Accuracy                  | 69.0%       | 66.0%            | 63.0%     | 52.0%          |
+  | Mean thinking tokens      | 200.4       | 549.3            | 143.4     | 186.9          |
+  | Mean total tokens         | 464.3       | 614.0            | 412.0     | 291.7          |
+  | Format compliance         | 98.0%       | 92.0%            | 100.0%    | 95.0%          |
 
 **Milestone:** Answer — did Grug style transfer without hurting GSM8K accuracy?
 

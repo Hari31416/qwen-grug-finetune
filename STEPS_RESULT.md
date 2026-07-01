@@ -237,4 +237,70 @@ Initially, we ran the raw trace generation using the target `Qwen3.5-0.8B-OptiQ-
 - Validated parser capability to extract exact numbers from complex LaTeX blocks (e.g. converting `\boxed{\$65,\!000}` correctly into `65000` to evaluate correctness).
 - Output files are correctly saved to `results/deepseek-r1-1.5b/baseline/gsm8k_normal.json` and `gsm8k_grug_prompt.json`.
 
+## Phase 8 — LoRA Training
 
+### What We Did
+
+- Implemented `scripts/train.py` as a wrapper script around `mlx_lm.lora` that loads base model parameters from `config.yaml` and training hyperparameters from `lora_config.yaml`.
+- Added dynamic output directory isolation using timestamped subdirectories under `adapters/deepseek-r1-1.5b/YYYYMMDD_HHMMSS/` to keep separate runs distinct.
+- Integrated real-time parsing to capture training/validation loss lines, dump them to `metrics.json`, and graph the loss curves as `loss_plot.png` using matplotlib.
+- Executed training for 100 iterations on the SFT dataset.
+- Verified that training successfully converged, dropping the validation loss from `3.726` to `3.122` and training loss from `3.491` to `2.769`.
+
+### Key Commands Run
+
+- Run LoRA SFT training:
+  ```bash
+  .venv/bin/python scripts/train.py --iters 100 --batch-size 4
+  ```
+
+- Verify Evaluation
+  ```bash
+  .venv/bin/python scripts/eval.py --benchmark gsm8k --split test --limit 100 --adapter
+  ```
+- Verify with Custom Timestamp
+  ```bash
+  .venv/bin/python scripts/eval.py --benchmark gsm8k --split test --limit 100 --adapter --adapter-path adapters/deepseek-r1-1.5b/20260701_205050
+  ```
+
+### What Worked
+
+- Successful real-time log parsing to record loss curves.
+- Automatic output directory isolation and generation of `metrics.json` and `loss_plot.png`.
+- Successful convergence on Apple Silicon GPU using MLX.
+
+## Phase 9 — GSM8K Fine-Tuned Evaluation
+
+### What We Did
+
+- Evaluated the fine-tuned model (automatically loading the latest timestamped adapter from `20260701_205050`) on the GSM8K test split.
+- Ran evaluations under both prompt conditions:
+  - **Fine-tuned model with normal prompt** (testing if Grug style SFT changed formatting or performance natively).
+  - **Fine-tuned model with explicit Grug prompt** (testing alignment of telegraphic reasoning control).
+- Analyzed and compared performance, reasoning token efficiency, latency, and format compliance against the base model baseline results.
+
+### Key Commands Run
+
+- Run fine-tuned evaluation (normal prompt):
+  ```bash
+  .venv/bin/python scripts/eval.py --benchmark gsm8k --split test --limit 100 --adapter --batch-size 16
+  ```
+
+- Run fine-tuned evaluation (Grug prompt):
+  ```bash
+  .venv/bin/python scripts/eval.py --benchmark gsm8k --split test --limit 100 --prompt-style grug --adapter --batch-size 16
+  ```
+
+### What Worked
+
+- Successful model evaluation and adapter loading.
+- Observed a **66% reduction** in emitted thinking tokens for Grug style reasoning (from **549.3** down to **186.9** tokens on average), which directly translated to a **58% speedup** in overall inference latency (from **2.12s** down to **0.88s**).
+- Format compliance rate increased under normal prompting from **98.0%** to **100.0%**, and under Grug prompting from **92.0%** to **95.0%**.
+- Verified side-by-side comparison metrics:
+
+  | Metric               | Base normal | Base Grug prompt | FT normal | FT Grug prompt |
+  | :------------------- | :---------- | :--------------- | :-------- | :------------- |
+  | Accuracy             | 69.0%       | 66.0%            | 63.0%     | 52.0%          |
+  | Mean thinking tokens | 200.4       | 549.3            | 143.4     | 186.9          |
+  | Mean total tokens    | 464.3       | 614.0            | 412.0     | 291.7          |
+  | Format compliance    | 98.0%       | 92.0%            | 100.0%    | 95.0%          |

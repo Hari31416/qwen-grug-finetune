@@ -139,8 +139,31 @@ def main() -> None:
     # Determine adapter path if adapter is enabled
     adapter_path: Optional[str] = None
     if args.adapter:
-        adapter_path = args.adapter_path if args.adapter_path else config.adapters
-        logger.info("Loading model with LoRA adapter from: %s", adapter_path)
+        if args.adapter_path:
+            adapter_path = args.adapter_path
+        else:
+            # Look for the latest timestamped subdirectory under config.adapters
+            base_adapter_dir = config.adapters
+            resolved_latest = None
+            if os.path.exists(base_adapter_dir):
+                subdirs = [
+                    os.path.join(base_adapter_dir, d)
+                    for d in os.listdir(base_adapter_dir)
+                    if os.path.isdir(os.path.join(base_adapter_dir, d))
+                ]
+                # Filter directories containing adapter files
+                valid_subdirs = [
+                    sd for sd in subdirs if os.path.exists(os.path.join(sd, "adapters.safetensors"))
+                ]
+                if valid_subdirs:
+                    resolved_latest = max(valid_subdirs)
+            
+            if resolved_latest:
+                adapter_path = resolved_latest
+                logger.info("Automatically resolved latest adapter path: %s", adapter_path)
+            else:
+                adapter_path = base_adapter_dir
+                logger.info("No timestamped adapter subdirectories found. Using default adapter path: %s", adapter_path)
     else:
         logger.info("Loading base model: %s", config.model_mlx_path)
 
