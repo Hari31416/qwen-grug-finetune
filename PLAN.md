@@ -234,14 +234,14 @@ Write a style guide with **before/after** examples. This guide is used both for 
 
 **Grug CoT:**
 
-> vars: x,y. eq: 2x+3=9. x=3. check: 2*3+3=9 ok.
+> vars x,y. eq 2x+3=9. x=3. check 2*3+3=9 ok.
 
 ### Style rules
 
 - Drop articles ("the", "a")
 - Use fragments, not full sentences
 - Keep symbols, numbers, code tokens intact
-- One step per line
+- One continuous paragraph of fragments (period-separated steps, not key-value lines)
 - No meta ("let me think", "I should consider")
 - Preserve logical steps — compression removes words, not reasoning steps
 
@@ -323,7 +323,7 @@ Keep structured JSONL before producing MLX `text` rows:
   "ground_truth": "yes",
   "raw_thinking": "...",
   "raw_answer": "yes",
-  "grug_thinking": "facts: ...\nans: yes",
+  "grug_thinking": "Route Chicago to New Orleans. Chicago Canal to Illinois River, Mississippi to New Orleans. Continuous waterway. Sailing possible.",
   "accepted": true,
   "accepted_reason": "answer_matches_ground_truth"
 }

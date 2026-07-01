@@ -88,10 +88,10 @@ mlx_lm.generate \
 
 **Goal:** Fixed rules for compression prompt and manual spot-checks.
 
-- [ ] Create `style_guide.md`
-- [ ] Include 5–10 before/after examples (math, logic, NLI, commonsense)
-- [ ] Document moderate terse rules (fragments, one step per line, no meta, keep logic steps)
-- [ ] Document compression quality bar (same answer, fewer tokens, no dropped steps)
+- [x] Create `style_guide.md`
+- [x] Include 5–10 before/after examples (math, logic, NLI, commonsense)
+- [x] Document moderate terse rules (fragments, continuous paragraph format, no meta, keep logic steps)
+- [x] Document compression quality bar (same answer, fewer tokens, no dropped steps)
 
 **Milestone:** `style_guide.md` is ready to paste into `compress_traces.py` system prompt.
 
@@ -322,10 +322,10 @@ python scripts/eval.py --benchmark gsm8k --split test --adapter --prompt-style g
 
 | #   | Phase                             | Status |
 | --- | --------------------------------- | ------ |
-| 0   | Prerequisites                     | ☐      |
-| 1   | Scaffold repo                     | ☐      |
-| 2   | MLX smoke test                    | ☐      |
-| 3   | Style guide                       | ☐      |
+| 0   | Prerequisites                     | ☑      |
+| 1   | Scaffold repo                     | ☑      |
+| 2   | MLX smoke test                    | ☑      |
+| 3   | Style guide                       | ☑      |
 | 4   | Sample 1k prompts                 | ☐      |
 | 5   | Pilot pipeline (10)               | ☐      |
 | 6   | Full pipeline (1k)                | ☐      |
