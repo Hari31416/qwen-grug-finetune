@@ -3,60 +3,16 @@ import sys
 import json
 import argparse
 import logging
-import re
 from typing import Dict, Any, Set, List
 
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
+from scripts.prompt_utils import build_user_prompt, extract_predicted_answer, is_correct_answer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("generate_traces")
-
-
-def is_correct_answer(raw_answer: str, ground_truth: str, source: str) -> bool:
-    """Normalize and verify if the raw answer matches the ground truth for different sources."""
-    if not raw_answer:
-        return False
-    
-    ans_clean = raw_answer.strip().lower()
-    gt_clean = ground_truth.strip().lower()
-    
-    # Remove punctuation that might warp exact word comparisons
-    ans_clean = re.sub(r'[.,\(\):"\'\?]', ' ', ans_clean).strip()
-    words = ans_clean.split()
-    if not words:
-        return False
-        
-    if source in ["strategyqa", "boolq"]:
-        # yes / no questions
-        if ans_clean == gt_clean:
-            return True
-        if words[0] == gt_clean or words[-1] == gt_clean:
-            return True
-        if gt_clean in words:
-            return True
-            
-    elif source in ["logiqa", "reclor", "piqa"]:
-        # Multiple choice options (A, B, C, D)
-        if ans_clean == gt_clean:
-            return True
-        if words[0] == gt_clean or words[-1] == gt_clean:
-            return True
-        if gt_clean in words:
-            return True
-        if ans_clean.startswith(gt_clean):
-            return True
-            
-    elif source == "anli":
-        # textual entailment (entailment, neutral, contradiction)
-        if ans_clean == gt_clean:
-            return True
-        if gt_clean in words:
-            return True
-            
-    return False
 
 
 VALID_SOURCES = ("strategyqa", "logiqa", "boolq", "anli", "piqa", "reclor")
@@ -154,16 +110,7 @@ def main() -> None:
 
             logger.info("[%d/%d] Generating trace for ID=%s (Source=%s)...", i, len(prompts_to_process), prompt_id, source)
 
-            # Append source-specific answer format constraints to the prompt
-            suffix = ""
-            if source in ["strategyqa", "boolq"]:
-                suffix = "\nAnswer in exactly one word: yes or no."
-            elif source in ["logiqa", "reclor", "piqa"]:
-                suffix = "\nState only the correct option letter corresponding to the answer."
-            elif source == "anli":
-                suffix = "\nState only the relation (entailment, neutral, or contradiction) corresponding to the answer."
-
-            full_prompt_text = prompt_text.strip() + suffix
+            full_prompt_text = build_user_prompt(prompt_text, source, choices)
 
             # Format using tokenizer chat template with thinking enabled
             messages = [{"role": "user", "content": full_prompt_text}]
@@ -202,9 +149,16 @@ def main() -> None:
             elif raw_thinking.startswith("Thinking Process:"):
                 raw_thinking = raw_thinking[len("Thinking Process:"):]
 
-            # Validate answer
-            is_correct = is_correct_answer(raw_answer, ground_truth, source)
-            logger.info("ID=%s -> Correct = %s (Predicted: %r, Ground Truth: %r)", prompt_id, is_correct, raw_answer, ground_truth)
+            is_correct = is_correct_answer(raw_answer, ground_truth, source, choices)
+            extracted = extract_predicted_answer(raw_answer, source, choices)
+            logger.info(
+                "ID=%s -> Correct = %s (Predicted: %r, Extracted: %r, Ground Truth: %r)",
+                prompt_id,
+                is_correct,
+                raw_answer,
+                extracted,
+                ground_truth,
+            )
 
             # Save record
             record = {

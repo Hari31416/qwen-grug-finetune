@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
+from scripts.prompt_utils import build_user_prompt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -50,17 +51,8 @@ def main() -> None:
         compressed_thinking = record["compressed_thinking"].strip()
         raw_answer = record["raw_answer"].strip()
         
-        # Suffix the generation constraint to user prompt so training mirrors inference setup
         source = record["source"]
-        suffix = ""
-        if source in ["strategyqa", "boolq"]:
-            suffix = "\nAnswer in exactly one word: yes or no."
-        elif source in ["logiqa", "reclor", "piqa"]:
-            suffix = "\nState only the correct option letter corresponding to the answer."
-        elif source == "anli":
-            suffix = "\nState only the relation (entailment, neutral, or contradiction) corresponding to the answer."
-            
-        full_prompt = prompt_text + suffix
+        full_prompt = build_user_prompt(prompt_text, source, record.get("choices"))
 
         # First format the user message with add_generation_prompt=True
         # This gives us the correct template prefix ending in "<think>\n"
