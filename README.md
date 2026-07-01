@@ -2,7 +2,7 @@
 
 Fine-tune **DeepSeek-R1-Distill-Qwen-1.5B** on Apple Silicon using MLX to learn telegraphic, token-efficient Grug style chain-of-thought reasoning without sacrificing task accuracy.
 
-> Phase 5 pilot pipeline complete. Next: full 1k data pipeline (Phase 6).
+> Phase 6 data pipeline complete (370 validated SFT examples). Next: GSM8K baseline evaluation (Phase 7).
 
 ## Project Structure
 

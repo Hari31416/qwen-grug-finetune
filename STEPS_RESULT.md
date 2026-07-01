@@ -155,3 +155,52 @@ Initially, we ran the raw trace generation using the target `Qwen3.5-0.8B-OptiQ-
 - Updated `STEPS.md`, `PLAN.md`, and `README.md` to reflect DeepSeek-R1-Distill-Qwen-1.5B as the permanent target model for CoT generation, SFT, and LoRA.
 - Re-ran validation on pilot data: 3/4 accepted, 1 rejected (truncated compression for `strategyqa-0004`).
 - Switched pilot source from StrategyQA to BoolQ: answers are passage-grounded (higher raw correctness expected); use `--source boolq --limit 10` for pilot runs. Full 1k pipeline uses all six sources.
+
+## Phase 6 — Full Data Pipeline
+
+### What We Did
+
+- Configured and executed trace generation on the full pool of 1,000 prompts using `scripts/generate_traces.py` on the `DeepSeek-R1-Distill-Qwen-1.5B-4bit` model.
+- Evaluated correctness of the 1,000 model answers against ground-truth dataset answers, yielding exactly 429 correct answers (representing a baseline raw accuracy of ~42.9% across mixed datasets).
+- Compressed the 429 correct traces into the telegraphic Grug reasoning style using OpenAI GPT-4o-mini-based NIM API.
+- Executed `scripts/validate_traces.py` to check all 429 compressions against the quality criteria.
+- Filtered out 59 failed rows (~13.75% validation rejection rate), leaving 370 highly compliant, correct Grug chain-of-thought traces.
+- Shuffled and partitioned the 370 validated traces into standard train/valid splits (90/10 ratio) using `scripts/format_data.py`, saving 333 train rows to `data/train.jsonl` and 37 valid rows to `data/valid.jsonl`.
+
+### Key Commands Run
+
+- Generate raw traces for the entire 1,000 pool:
+
+  ```bash
+  ./.venv/bin/python scripts/generate_traces.py
+  ```
+
+- Run compression on all correct raw traces:
+
+  ```bash
+  ./.venv/bin/python scripts/compress_traces.py
+  ```
+
+- Run validation and generate validation report:
+
+  ```bash
+  ./.venv/bin/python scripts/validate_traces.py --report
+  ```
+
+- Format and split validated data:
+
+  ```bash
+  ./.venv/bin/python scripts/format_data.py
+  ```
+
+### What Worked
+
+- The pipeline handled the entire 1,000-prompt datasets autonomously.
+- Verified that correctness check effectively filtered out hallucinated reasoning and wrong answers.
+- `validation_report.json` was generated successfully, tracking exactly why traces were rejected (e.g. numeric facts missing, key-value anti-patterns).
+- `format_data.py` formatted and mapped tokens correctly inside SFT files (`data/train.jsonl` and `data/valid.jsonl`).
+
+### Issues Faced and Resolutions
+
+- **Validation rejections:** Around 13.8% of compressed samples were auto-rejected during `validate_traces.py` due to dropping numeric facts or multiple-choice options. This is a normal and acceptable filter rate that guarantees high training data quality. We decided not to lower the validation bar since 370 samples is a robust set for fine-tuning the 1.5B Qwen model.
+

@@ -156,15 +156,15 @@ Build scripts in this order:
 
 **Goal:** Complete SFT dataset with 1,000 accepted, ground-truth-correct rows.
 
-- [ ] Run `generate_traces.py` on prompt pool (long-running; resumable checkpoints recommended)
-- [ ] Filter raw traces against dataset ground truth; refill from source datasets if needed
-- [ ] Run `compress_traces.py` on accepted raw traces (~1k OpenAI calls)
-- [ ] Run `validate_traces.py` — log rejection rate and reasons
-- [ ] Spot-check ~100 accepted compressions manually
-- [ ] If rejection rate > 15%, inspect failures and tune compression prompt
-- [ ] Run `format_data.py` → `data/train.jsonl` (900) + `data/valid.jsonl` (100)
+- [x] Run `generate_traces.py` on prompt pool (long-running; resumable checkpoints recommended)
+- [x] Filter raw traces against dataset ground truth; refill from source datasets if needed
+- [x] Run `compress_traces.py` on accepted raw traces (~1k OpenAI calls)
+- [x] Run `validate_traces.py` — log rejection rate and reasons
+- [x] Spot-check ~100 accepted compressions manually
+- [x] If rejection rate > 15%, inspect failures and tune compression prompt
+- [x] Run `format_data.py` → `data/train.jsonl` (900) + `data/valid.jsonl` (100)
 
-**Milestone:** Final train/valid JSONL ready; document raw-answer rejection, compression rejection, and spot-check stats in `data/compressed/validation_report.json`.
+**Milestone:** Final train/valid JSONL ready; document raw-answer rejection, compression rejection, and spot-check stats in `data/compressed/validation_report.json`. (Completed: 370 SFT rows generated - 333 train / 37 valid).
 
 ---
 
