@@ -18,15 +18,14 @@
   ./.venv/bin/python -c "import mlx.core as mx; print(mx.default_device())"
   ```
 
-- Run local generation inference test:
+- Run local generation inference test (with repetition & presence penalties):
 
   ```bash
-  ./.venv/bin/mlx_lm.generate \
-    --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit \
+  ./.venv/bin/python scripts/generate.py \
     --prompt "If John has 3 apples and buys 2 more, how many does he have?" \
-    --max-tokens 500 \
-    --temp 0.6 \
-    --top-p 0.95
+    --repetition-penalty 1.1 \
+    --presence-penalty 0.2 \
+    --max-tokens 500
   ```
 
 - Create mock SFT dataset:
@@ -56,5 +55,6 @@
 
 ### Issues Faced and Resolutions
 
-- **Inference repetition/looping:** When running with temperature `0` or default parameters, the model got stuck in a repetitive loop inside the thinking process block. Running the inference with the default config settings (temperature `0.6`, `top_p 0.95`) resolved this issue, yielding a clean CoT trace and correct final answer.
+- **Inference repetition/looping:** When running with temperature `0` or default parameters, the model got stuck in a repetitive loop inside the thinking process block. Running the inference with standard temperature (`0.6`) and `top_p` (`0.95`) combined with `repetition_penalty: 1.1` and `presence_penalty: 0.2` completely resolved this issue, yielding a clean CoT trace and correct final answer. We built a custom inference runner (`scripts/generate.py`) supporting these parameters.
 - **LoRA configuration scale KeyError:** Executing the training command resulted in a traceback (`KeyError: 'scale'`). Newer versions of `mlx_lm` require the `scale` parameter in the `lora_parameters` section of `lora_config.yaml`. Adding `scale: 2.0` (computed as `alpha / rank` = `16 / 8`) resolved the training crash.
+
