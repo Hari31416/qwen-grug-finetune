@@ -101,8 +101,8 @@ mlx_lm.generate \
 
 **Goal:** 1,000 prompts from six datasets, zero benchmark overlap.
 
-- [ ] Implement `scripts/sample_sft_prompts.py`
-- [ ] Sample per source:
+- [x] Implement `scripts/sample_sft_prompts.py`
+- [x] Sample per source:
 
   | Source     | Count |
   | ---------- | ----- |
@@ -114,10 +114,10 @@ mlx_lm.generate \
   | ReClor     | 200   |
   | **Total**  | 1,000 |
 
-- [ ] Blocklist `gsm8k`, `ai2_arc` dataset IDs
-- [ ] Tag each row with `source`, `prompt`, `choices` where applicable, and `ground_truth`
-- [ ] Write `data/sft/prompts.jsonl` (1,000 rows)
-- [ ] Keep unsplit prompt pool; split train/valid only after filtering for correct model answers
+- [x] Blocklist `gsm8k`, `ai2_arc` dataset IDs
+- [x] Tag each row with `source`, `prompt`, `choices` where applicable, and `ground_truth`
+- [x] Write `data/sft/prompts.jsonl` (1,000 rows)
+- [x] Keep unsplit prompt pool; split train/valid only after filtering for correct model answers
 
 **Milestone:** `data/sft/prompts.jsonl` exists; spot-check 10 rows for format and no benchmark leakage.
 
@@ -326,7 +326,7 @@ python scripts/eval.py --benchmark gsm8k --split test --adapter --prompt-style g
 | 1   | Scaffold repo                     | ☑      |
 | 2   | MLX smoke test                    | ☑      |
 | 3   | Style guide                       | ☑      |
-| 4   | Sample 1k prompts                 | ☐      |
+| 4   | Sample 1k prompts                 | ☑      |
 | 5   | Pilot pipeline (10)               | ☐      |
 | 6   | Full pipeline (1k)                | ☐      |
 | 7   | GSM8K baseline                    | ☐      |
