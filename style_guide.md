@@ -1,6 +1,10 @@
 # Grug Style Guide for Chain of Thought Compression
 
-This document defines rules for compressing verbose chain-of-thought (CoT) traces into a token-efficient, telegraphic "Grug" style using short, sentence-fragment-based prose. Use these guidelines in compression prompts and during manual spot-checks.
+This document defines rules for compressing verbose chain-of-thought (CoT) traces into a token-efficient, telegraphic "Grug" style using short, sentence-fragment-based prose. Use these guidelines in the `compress_traces.py` system prompt and during manual spot-checks.
+
+## Compressor Contract
+
+`compress_traces.py` sends **only** the raw reasoning trace to the compressor and expects **only** compressed reasoning text back. The user question and final answer are not passed in and must not appear in the output. The pipeline keeps `raw_answer` from the generation step unchanged when formatting SFT rows.
 
 ## Core Objective
 
@@ -8,9 +12,11 @@ Reduce token consumption in the thinking phase by eliminating linguistic overhea
 
 ## Scope
 
-- Compress **only** the reasoning trace (the thinking block). Do not alter, restate, shorten, or append the final answer.
-- Do not fix, improve, or rewrite reasoning that leads to a wrong answer. Shorten the trace as given; upstream validation ensures the raw answer matches ground truth before compression.
-- Grug style applies to `<think>` content only. Final answers in SFT data stay clear and unchanged.
+- **Input:** verbose reasoning trace only.
+- **Output:** compressed reasoning trace only — no question, labels, wrapper text, or final-answer restatement.
+- Shorten phrasing only; preserve every logical step from the input trace.
+- If the verbose trace ends with a final-answer restatement (e.g., "Therefore the answer is 40", "So the answer is yes"), **drop it** in the compressed output. That conclusion already lives in the separate answer field outside `<think>`.
+- Do not correct, improve, or rewrite reasoning. Compress the trace as given; upstream validation ensures `raw_answer` matches ground truth before compression runs.
 
 ## Output Format
 
@@ -39,9 +45,9 @@ Step one fact. Step two inference. Step three calculation. Conclusion.
 
 A compressed trace is valid only if it meets these criteria:
 
-- **Same Answer:** The final answer matches the raw trace exactly.
-- **Token Efficiency:** The compressed thinking block uses 50% or fewer tokens than the verbose thinking block.
-- **Completeness:** No logical step required to arrive at the answer is omitted.
+- **Logical fidelity:** Every intermediate step required by the raw trace is preserved in compressed form; no steps added or removed.
+- **Token efficiency:** The compressed thinking block uses 50% or fewer tokens than the verbose thinking block.
+- **Reasoning-only output:** Output is compressed reasoning text only — no final-answer restatement, question recap, or metadata.
 
 ## Before and After Examples
 
@@ -171,15 +177,7 @@ Reject compressions that look like these:
 
 **Why invalid:** Skips both premises needed to derive the conclusion.
 
-### Anti-Pattern 2: Answer changed or restated in thinking block
-
-**Verbose:** Sarah has $10. Mark has 3× Sarah = $30. Total $40.
-
-**Bad compression:** Sarah 10. Mark 30. Total 40. **Answer: forty dollars.**
-
-**Why invalid:** Final answer must not appear in the compressed thinking block; the answer field stays separate and unchanged.
-
-### Anti-Pattern 3: Key-value or line-per-step format
+### Anti-Pattern 2: Key-value or line-per-step format
 
 **Verbose:** Metal conducts heat. Wood insulates. Metal spoon heats first.
 

@@ -139,7 +139,7 @@ SFT prompts (StrategyQA, LogiQA, BoolQ, ANLI, PIQA, ReClor)
 GSM8K test / ARC eval  →  baseline + fine-tuned eval only (never in SFT)
 ```
 
-Critical guardrail: keep only SFT rows where the target model's generated final answer matches the dataset's ground-truth label. The compressor should shorten correct reasoning, not preserve a wrong answer just because raw and compressed outputs agree.
+Critical guardrail: keep only SFT rows where the target model's generated final answer matches the dataset's ground-truth label. The compressor shortens the reasoning trace only; it never sees or rewrites the answer field.
 
 ---
 
@@ -289,8 +289,8 @@ General-purpose prompt (StrategyQA / LogiQA / BoolQ / ANLI / PIQA / ReClor)
 1. Feed general-purpose prompt to target model with thinking enabled
 2. Capture `raw_thinking`, `answer`
 3. Compare `answer` against the dataset's ground-truth label; reject wrong or unparseable rows
-4. Prompt compressor: given question + raw_thinking + answer + Grug style guide → output `grug_thinking`
-5. Validate: compressed trace must not change the answer; reject or flag if logic steps were dropped
+4. Prompt compressor: given `raw_thinking` + Grug style guide → output `grug_thinking` (reasoning only; question and answer not sent)
+5. Validate: logic steps preserved, token budget met, no final-answer restatement in `grug_thinking`; reject or flag failures
 6. Format as MLX training example
 
 ### Stage 2 — Higher-quality raw CoT (later iteration)
@@ -341,7 +341,7 @@ Manually review ~100 compressed examples before first training run:
 
 Discard or fix failures before training.
 
-**Validation policy:** Auto-reject rows where raw answer mismatches ground truth, auto-reject compressed answer mismatches, then manual spot-check (no LLM-judge on every row for v1).
+**Validation policy:** Auto-reject rows where raw answer mismatches ground truth, auto-reject compressions that drop logic steps or restate the final answer, then manual spot-check (no LLM-judge on every row for v1).
 
 ### Qwen 3.5 chat format
 
@@ -567,7 +567,7 @@ See [When to switch to 2B](#when-to-switch-to-2b) above. The 2B variant fits com
 | **SFT size (v1)**           | 1,000 prompts (900 train / 100 valid)                                           |
 | **ARC timing**              | Week 2 eval (defer until pipeline validated)                                    |
 | **Grug tereness**           | Moderate — telegraphic fragments, all logic steps preserved                     |
-| **Compression validation**  | Ground-truth filter + compressed-answer match + manual spot-check ~100 examples |
+| **Compression validation**  | Ground-truth filter + logic/token checks on compressed reasoning + manual spot-check ~100 examples |
 | **Compressor**              | OpenAI API — user provides API key, base URL, and model name via env            |
 | **Stage 2 raw trace model** | Decide after stage 1 results                                                    |
 | **Thinking token budget**   | No cap in primary eval; capped ablations (256/512) in Week 2                    |

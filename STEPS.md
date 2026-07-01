@@ -91,7 +91,7 @@ mlx_lm.generate \
 - [x] Create `style_guide.md`
 - [x] Include 5–10 before/after examples (math, logic, NLI, commonsense)
 - [x] Document moderate terse rules (fragments, continuous paragraph format, no meta, keep logic steps)
-- [x] Document compression quality bar (same answer, fewer tokens, no dropped steps)
+- [x] Document compression quality bar (logic preserved, fewer tokens, reasoning-only output)
 
 **Milestone:** `style_guide.md` is ready to paste into `compress_traces.py` system prompt.
 
@@ -143,7 +143,7 @@ Build scripts in this order:
 - [ ] Parse raw thinking and final answer
 - [ ] Validate raw final answer against the source dataset's ground truth
 - [ ] Compress via OpenAI using `style_guide.md`
-- [ ] Auto-reject raw answer mismatches, compressed-answer mismatches, and unparseable rows
+- [ ] Auto-reject raw answer mismatches, compressions that drop logic steps or restate the final answer, and unparseable rows
 - [ ] Manually review 5 compressions — check logic preserved, Grug style consistent
 - [ ] Format to MLX chat template with visible `<think>...</think>` tokens and required chat delimiters
 - [ ] Fix any bugs in parsing, chat template, or API prompt
