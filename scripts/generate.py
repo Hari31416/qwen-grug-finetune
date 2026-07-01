@@ -46,6 +46,12 @@ def main() -> None:
         default=0.2,
         help="Presence penalty (0.0 to disable)",
     )
+    parser.add_argument(
+        "--system-prompt",
+        type=str,
+        default="",
+        help="Optional system prompt to guide model behavior",
+    )
 
     args = parser.parse_args()
 
@@ -53,7 +59,11 @@ def main() -> None:
     model, tokenizer = load(config.model_mlx_path)
 
     # Format the prompt using the model's tokenizer chat template
-    messages = [{"role": "user", "content": args.prompt}]
+    messages = []
+    if args.system_prompt:
+        messages.append({"role": "system", "content": args.system_prompt})
+    messages.append({"role": "user", "content": args.prompt})
+
     formatted_prompt: str = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
