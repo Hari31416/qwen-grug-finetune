@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import shutil
 import argparse
 import logging
 from typing import Dict, Any, Optional
@@ -68,7 +69,8 @@ def main() -> None:
 
     # Determine paths
     model_results_dir = config.results
-    plots_dir = args.output_dir if args.output_dir else os.path.join(model_results_dir, "plots")
+    report_dir = os.path.join(config.workspace_root, "report")
+    plots_dir = args.output_dir if args.output_dir else report_dir
     os.makedirs(plots_dir, exist_ok=True)
 
     # 1. Load evaluation summaries
@@ -422,6 +424,47 @@ def main() -> None:
         plt.savefig(delta_file, dpi=150, bbox_inches="tight")
         plt.close()
         logger.info("Saved: %s", delta_file)
+
+    # --- COPY RAW JSON FILES ---
+    logger.info("Copying raw evaluation JSON files to output directory...")
+    json_mapping = {
+        "Base Normal": (os.path.join(config.results, "baseline", "gsm8k_normal.json"), "gsm8k_normal_baseline.json"),
+        "Base Grug": (os.path.join(config.results, "baseline", "gsm8k_grug_prompt.json"), "gsm8k_grug_baseline.json"),
+        "FT Normal": (os.path.join(config.results, "finetuned", "gsm8k_normal.json"), "gsm8k_normal_finetuned.json"),
+        "FT Grug": (os.path.join(config.results, "finetuned", "gsm8k_grug_prompt.json"), "gsm8k_grug_finetuned.json"),
+    }
+    
+    for name, (src_path, dest_name) in json_mapping.items():
+        if os.path.exists(src_path):
+            dest_path = os.path.join(plots_dir, dest_name)
+            try:
+                shutil.copy2(src_path, dest_path)
+                logger.info("Copied raw JSON %s to %s", name, dest_path)
+            except Exception as copy_err:
+                logger.error("Failed to copy %s: %s", name, copy_err)
+        else:
+            logger.warning("Raw JSON file not found: %s", src_path)
+
+    # Copy latest metrics.json
+    base_adapter_dir = config.adapters
+    if os.path.exists(base_adapter_dir):
+        subdirs = [
+            os.path.join(base_adapter_dir, d)
+            for d in os.listdir(base_adapter_dir)
+            if os.path.isdir(os.path.join(base_adapter_dir, d))
+        ]
+        valid_subdirs = [
+            sd for sd in subdirs if os.path.exists(os.path.join(sd, "metrics.json"))
+        ]
+        if valid_subdirs:
+            latest_dir = max(valid_subdirs)
+            src_metrics = os.path.join(latest_dir, "metrics.json")
+            dest_metrics = os.path.join(plots_dir, "metrics.json")
+            try:
+                shutil.copy2(src_metrics, dest_metrics)
+                logger.info("Copied raw training metrics from %s to %s", latest_dir, dest_metrics)
+            except Exception as copy_err:
+                logger.error("Failed to copy training metrics: %s", copy_err)
 
 
 if __name__ == "__main__":

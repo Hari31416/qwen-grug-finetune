@@ -230,10 +230,10 @@ python scripts/eval.py --benchmark gsm8k --split test
 
   | Metric                    | Base normal | Base Grug prompt | FT normal | FT Grug prompt |
   | ------------------------- | ----------- | ---------------- | --------- | -------------- |
-  | Accuracy                  | 69.0%       | 66.0%            | 63.0%     | 52.0%          |
-  | Mean thinking tokens      | 200.4       | 549.3            | 143.4     | 186.9          |
-  | Mean total tokens         | 464.3       | 614.0            | 412.0     | 291.7          |
-  | Format compliance         | 98.0%       | 92.0%            | 100.0%    | 95.0%          |
+  | Accuracy                  | 73.0%       | 70.0%            | 62.0%     | 40.0%          |
+  | Mean thinking tokens      | 205.0       | 481.2            | 164.3     | 166.8          |
+  | Mean total tokens         | 476.0       | 545.3            | 392.4     | 247.8          |
+  | Format compliance         | 98.0%       | 92.0%            | 99.0%     | 92.0%          |
 
 **Milestone:** Answer — did Grug style transfer without hurting GSM8K accuracy?
 
@@ -328,14 +328,14 @@ python scripts/eval.py --benchmark gsm8k --split test --adapter --prompt-style g
 | 3   | Style guide                       | ☑      |
 | 4   | Sample 1k prompts                 | ☑      |
 | 5   | Pilot pipeline (10)               | ☑      |
-| 6   | Full pipeline (1k)                | ☐      |
-| 7   | GSM8K baseline                    | ☐      |
-| 8   | LoRA training                     | ☐      |
-| 9   | GSM8K fine-tuned eval             | ☐      |
+| 6   | Full pipeline (1k)                | ☑      |
+| 7   | GSM8K baseline                    | ☑      |
+| 8   | LoRA training                     | ☑      |
+| 9   | GSM8K fine-tuned eval             | ☑      |
 | 10  | Week 2 (ARC, ablations, write-up) | ☐      |
 
 ---
 
 ## What to do right now
 
-Start with **Phase 6 full pipeline (1k rows)**. Manual spot-check ~100 accepted compressions before first LoRA training run.
+Proceed to **Phase 10: Week 2 (ARC-Challenge evaluation, ablations, and final write-up)**.
