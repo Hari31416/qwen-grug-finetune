@@ -3,38 +3,29 @@
 PYTHON = uv run python
 LIMIT = 100
 BATCH_SIZE = 16
-ITERS = 300
 SAVE_EVERY = 20
 
-.PHONY: help train eval-base-normal eval-base-grug eval-ft-normal eval-ft-grug eval-all plot clean
+.PHONY: help train eval-base eval-ft eval-all plot clean
 
 help:
 	@echo "Available commands:"
-	@echo "  make train               Run SFT training with default settings (300 iters)"
-	@echo "  make eval-base-normal    Evaluate base model with normal prompt (default: LIMIT=100, BATCH_SIZE=16)"
-	@echo "  make eval-base-grug      Evaluate base model with Grug prompt"
-	@echo "  make eval-ft-normal      Evaluate fine-tuned model with normal prompt"
-	@echo "  make eval-ft-grug        Evaluate fine-tuned model with Grug prompt"
-	@echo "  make eval-all            Run all baseline & fine-tuned evaluations sequentially"
-	@echo "  make plot                Generate comparison dashboard and separate plots"
-	@echo "  make clean               Clean Python cache files"
+	@echo "  make train          Run SFT training (hyperparams from lora_config.yaml)"
+	@echo "  make eval-base      Evaluate base model with style system prompt (default: LIMIT=100, BATCH_SIZE=16)"
+	@echo "  make eval-ft        Evaluate fine-tuned model with style system prompt"
+	@echo "  make eval-all       Run base and fine-tuned evaluations sequentially"
+	@echo "  make plot           Generate comparison dashboard and separate plots"
+	@echo "  make clean          Clean Python cache files"
 
 train:
-	$(PYTHON) scripts/train.py --iters $(ITERS) --save-every $(SAVE_EVERY) --batch-size 4
+	$(PYTHON) scripts/train.py --save-every $(SAVE_EVERY)
 
-eval-base-normal:
+eval-base:
 	$(PYTHON) scripts/eval.py --benchmark gsm8k --split test --limit $(LIMIT) --batch-size $(BATCH_SIZE)
 
-eval-base-grug:
-	$(PYTHON) scripts/eval.py --benchmark gsm8k --split test --limit $(LIMIT) --batch-size $(BATCH_SIZE) --prompt-style grug
-
-eval-ft-normal:
+eval-ft:
 	$(PYTHON) scripts/eval.py --benchmark gsm8k --split test --limit $(LIMIT) --batch-size $(BATCH_SIZE) --adapter
 
-eval-ft-grug:
-	$(PYTHON) scripts/eval.py --benchmark gsm8k --split test --limit $(LIMIT) --batch-size $(BATCH_SIZE) --prompt-style grug --adapter
-
-eval-all: eval-base-normal eval-base-grug eval-ft-normal eval-ft-grug
+eval-all: eval-base eval-ft
 
 plot:
 	$(PYTHON) scripts/plot_results.py

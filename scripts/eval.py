@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
-from scripts.prompt_utils import build_user_prompt
+from scripts.prompt_utils import build_user_prompt, STYLE_SYSTEM_PROMPT
 from scripts.generation_utils import (
     load_model_and_tokenizer,
     get_generation_parameters,
@@ -26,17 +26,7 @@ logger = logging.getLogger("eval")
 from mlx_lm import stream_generate, batch_generate
 from datasets import load_dataset
 
-GRUG_SYSTEM_PROMPT: str = (
-    'You must write your thinking process in a token-efficient, telegraphic "Grug" style using short, sentence-fragment-based prose.\n'
-    "Follow these style rules exactly:\n"
-    '- Drop articles like "the" and "a" where possible.\n'
-    "- Use telegraphic fragments rather than complete sentences.\n"
-    "- Keep numbers, equations, math symbols, variables, and code tokens exactly intact.\n"
-    '- Avoid any meta-commentary, filler phrasing, self-corrections, or back-tracking markers (e.g., "wait...", "okay...", "let us see").\n'
-    "- Keep logical transitions and step-by-step intermediate derivations. Never skip steps to make reasoning shorter; only make the phrasing of those steps shorter.\n"
-    "- Do not repeat statements.\n"
-    "- Output only the thinking process in this style, and then end the thinking block with </think>."
-)
+
 
 
 def extract_numeric_answer(text: str) -> Optional[str]:
@@ -92,11 +82,9 @@ def main() -> None:
         help="The dataset split to evaluate (e.g. test)",
     )
     parser.add_argument(
-        "--prompt-style",
-        type=str,
-        default="normal",
-        choices=["normal", "grug"],
-        help="Style of system instructions (normal or grug)",
+        "--no-system-prompt",
+        action="store_true",
+        help="Disable the style system prompt (ablation only; omit for standard runs)",
     )
     parser.add_argument(
         "--adapter",
@@ -217,8 +205,8 @@ def main() -> None:
             question = row["question"]
             full_prompt_text = build_user_prompt(question, "gsm8k")
             messages = []
-            if args.prompt_style == "grug":
-                messages.append({"role": "system", "content": GRUG_SYSTEM_PROMPT})
+            if not args.no_system_prompt:
+                messages.append({"role": "system", "content": STYLE_SYSTEM_PROMPT})
             messages.append({"role": "user", "content": full_prompt_text})
             formatted_prompt = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
@@ -311,8 +299,8 @@ def main() -> None:
 
             # Construct messages using tokenizer's template
             messages = []
-            if args.prompt_style == "grug":
-                messages.append({"role": "system", "content": GRUG_SYSTEM_PROMPT})
+            if not args.no_system_prompt:
+                messages.append({"role": "system", "content": STYLE_SYSTEM_PROMPT})
             messages.append({"role": "user", "content": full_prompt_text})
 
             formatted_prompt = tokenizer.apply_chat_template(
@@ -435,10 +423,7 @@ def main() -> None:
     output_dir = os.path.join(config.results, subfolder)
     os.makedirs(output_dir, exist_ok=True)
 
-    filename = f"{args.benchmark}_{args.prompt_style}.json"
-    if args.prompt_style == "grug":
-        filename = f"{args.benchmark}_grug_prompt.json"
-
+    filename = f"{args.benchmark}.json"
     output_path = os.path.join(output_dir, filename)
 
     output_data = {

@@ -1,6 +1,19 @@
 import re
 from typing import List, Optional, Set
 
+STYLE_SYSTEM_PROMPT: str = (
+    "Write your reasoning in a concise, telegraphic style inside the thinking block.\n"
+    "\n"
+    "Rules:\n"
+    "- Use short sentence fragments separated by periods, not full prose paragraphs.\n"
+    '- Drop articles ("the", "a") where possible.\n'
+    "- Keep numbers, equations, symbols, variables, and option letters intact.\n"
+    "- Preserve every logical step from the problem; shorten phrasing only, never skip steps.\n"
+    '- No meta-commentary, filler, or self-corrections (e.g. "wait", "okay", "let me think").\n'
+    "- Do not repeat the same calculation or assertion.\n"
+    "- Do not restate the final answer inside the thinking block."
+)
+
 
 def get_answer_format_suffix(source: str, choices: Optional[List[str]] = None) -> str:
     """Return a strict final-answer instruction appended to the user prompt."""

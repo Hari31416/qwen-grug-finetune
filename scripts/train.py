@@ -303,6 +303,27 @@ def main() -> None:
     if args.learning_rate:
         logger.info("  LR Override:       %s", args.learning_rate)
 
+    # Log key LoRA config values from YAML for full run-time visibility
+    try:
+        import yaml
+        with open(args.config_file, "r") as _f:
+            _lora_cfg = yaml.safe_load(_f)
+        _lp = _lora_cfg.get("lora_parameters", {})
+        logger.info("--- LoRA Config (%s) ---", os.path.basename(args.config_file))
+        logger.info("  rank:           %s", _lp.get("rank", "—"))
+        logger.info("  alpha:          %s", _lp.get("alpha", "—"))
+        logger.info("  scale:          %s", _lp.get("scale", "—"))
+        logger.info("  dropout:        %s", _lp.get("dropout", "—"))
+        logger.info("  iters:          %s", args.iters if args.iters else _lora_cfg.get("iters", "—"))
+        logger.info("  batch_size:     %s", args.batch_size if args.batch_size else _lora_cfg.get("batch_size", "—"))
+        logger.info("  learning_rate:  %s", args.learning_rate if args.learning_rate else _lora_cfg.get("learning_rate", "—"))
+        logger.info("  save_every:     %s", args.save_every)
+        logger.info("  steps_per_eval: %s", _lora_cfg.get("steps_per_eval", "—"))
+        logger.info("------------------------")
+    except Exception as _e:
+        logger.warning("Could not parse lora_config.yaml for display: %s", _e)
+
+
     run_training(
         model=args.model,
         adapter_path=args.adapter_path,

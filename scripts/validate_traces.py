@@ -298,6 +298,7 @@ def main() -> None:
         all_scores.append(score_info)
 
         if is_valid:
+            record['sft_style'] = 'compressed'
             accepted_records.append(record)
         else:
             rejected_stats[reason] = rejected_stats.get(reason, 0) + 1

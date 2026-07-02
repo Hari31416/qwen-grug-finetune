@@ -2,8 +2,8 @@
 # Note: model, data, and adapter_path will be set dynamically by train.py based on config.yaml.
 
 lora_parameters:
-  rank: 8
-  alpha: 16
+  rank: 16
+  alpha: 32
   scale: 2.0
   dropout: 0.05
   keys: 
@@ -13,10 +13,10 @@ lora_parameters:
     - "self_attn.o_proj"
 
 # Training hyperparameters
-batch_size: 2
-iters: 800
-learning_rate: 1e-5
+batch_size: 4
+iters: 1000
+learning_rate: 5e-6
 steps_per_report: 10
-steps_per_eval: 50
+steps_per_eval: 20
 val_batches: 25
-save_every: 100
+save_every: 20
