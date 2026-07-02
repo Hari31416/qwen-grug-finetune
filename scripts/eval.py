@@ -11,13 +11,17 @@ from typing import Dict, Any, List, Optional
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
 from scripts.prompt_utils import build_user_prompt
+from scripts.generation_utils import (
+    load_model_and_tokenizer,
+    get_generation_parameters,
+    parse_thinking_and_answer,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("eval")
 
-from mlx_lm import load, stream_generate, batch_generate
-from mlx_lm.sample_utils import make_sampler, make_logits_processors
+from mlx_lm import stream_generate, batch_generate
 from datasets import load_dataset
 
 GRUG_SYSTEM_PROMPT: str = (
@@ -168,7 +172,7 @@ def main() -> None:
         logger.info("Loading base model: %s", config.model_mlx_path)
 
     # Load model and tokenizer
-    model, tokenizer = load(config.model_mlx_path, adapter_path=adapter_path)
+    model, tokenizer = load_model_and_tokenizer(config.model_mlx_path, adapter_path=adapter_path)
 
     # Load benchmark dataset
     if args.benchmark == "gsm8k":
@@ -185,8 +189,9 @@ def main() -> None:
         samples = samples[: args.limit]
 
     # Setup sampler and logits processors
-    sampler = make_sampler(temp=args.temp, top_p=args.top_p)
-    logits_processors = make_logits_processors(
+    sampler, logits_processors = get_generation_parameters(
+        temp=args.temp,
+        top_p=args.top_p,
         repetition_penalty=1.1,
         presence_penalty=0.2,
     )
@@ -235,15 +240,8 @@ def main() -> None:
             output_text = batch_response.texts[i - 1]
 
             # Parse thinking block
-            if "</think>" in output_text:
-                parts = output_text.split("</think>", 1)
-                thinking_content = parts[0]
-                answer_content = parts[1].strip()
-                format_compliance = len(answer_content) > 0
-            else:
-                thinking_content = output_text
-                answer_content = ""
-                format_compliance = False
+            thinking_content, answer_content = parse_thinking_and_answer(output_text, strip_prefix=False)
+            format_compliance = len(answer_content) > 0
 
             thinking_tokens = len(tokenizer.encode(thinking_content))
             answer_tokens = len(tokenizer.encode(answer_content))
@@ -326,15 +324,8 @@ def main() -> None:
             latency_seconds = time.perf_counter() - start_time
 
             # Parse thinking block
-            if "</think>" in output_text:
-                parts = output_text.split("</think>", 1)
-                thinking_content = parts[0]
-                answer_content = parts[1].strip()
-                format_compliance = len(answer_content) > 0
-            else:
-                thinking_content = output_text
-                answer_content = ""
-                format_compliance = False
+            thinking_content, answer_content = parse_thinking_and_answer(output_text, strip_prefix=False)
+            format_compliance = len(answer_content) > 0
 
             # Token counts
             thinking_tokens = len(tokenizer.encode(thinking_content))

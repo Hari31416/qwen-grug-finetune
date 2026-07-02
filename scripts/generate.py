@@ -2,12 +2,15 @@ import os
 import sys
 import argparse
 import logging
-from mlx_lm import load, generate
-from mlx_lm.sample_utils import make_sampler, make_logits_processors
+from mlx_lm import generate
 
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
+from scripts.generation_utils import (
+    load_model_and_tokenizer,
+    get_generation_parameters,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -55,8 +58,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    logger.info("Loading model from: %s", config.model_mlx_path)
-    model, tokenizer = load(config.model_mlx_path)
+    model, tokenizer = load_model_and_tokenizer(config.model_mlx_path)
 
     # Format the prompt using the model's tokenizer chat template
     messages = []
@@ -76,13 +78,11 @@ def main() -> None:
         args.presence_penalty,
     )
 
-    # 1. Create native MLX-LM sampler
-    sampler = make_sampler(temp=args.temp, top_p=args.top_p)
-
-    # 2. Create logits processors for repetition / presence penalty
-    logits_processors = make_logits_processors(
-        repetition_penalty=args.repetition_penalty if args.repetition_penalty != 1.0 else None,
-        presence_penalty=args.presence_penalty if args.presence_penalty != 0.0 else None,
+    sampler, logits_processors = get_generation_parameters(
+        temp=args.temp,
+        top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty,
+        presence_penalty=args.presence_penalty,
     )
 
     # Generate response
