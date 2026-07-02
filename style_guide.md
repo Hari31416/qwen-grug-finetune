@@ -41,6 +41,31 @@ Step one fact. Step two inference. Step three calculation. Conclusion.
 - Do not repeat the same statement, calculation, or logical assertion multiple times.
 - Keep logical transitions and step-by-step intermediate derivations. Never skip steps to make reasoning shorter; only make the phrasing of those steps shorter.
 
+### Banned Phrases (never appear in output)
+
+These phrases add zero logical content and must be eliminated:
+
+- **Source meta-commentary:** "passage states", "passage says", "text says", "text states", "according to passage", "the argument states", "the problem states". Cite the claim directly — not its source.
+- **Relational filler:** "which means", "which is", "which are", "this means", "this suggests", "this implies", "this indicates", "based on", "in this case", "in the context of", "as a result". Use `→` or state the consequence directly.
+- **Task-framing openers:** "need to determine", "we need to", "in order to", "let us", "we can see", "I need to", "we must". Jump straight to the first fact or inference.
+- **Certainty hedges as full clauses:** "it is clear that", "it is important that", "it is worth noting". Drop entirely or fold into the claim.
+
+### Arrow Notation
+
+Use `→` universally for inference, causation, and implication. Prefer symbol over prose:
+
+- `A → B` instead of "A implies B", "A leads to B", "A causes B", "A results in B", "therefore B".
+- Chain multi-step inference: `A → B → C` instead of three separate sentences.
+- Use `>`, `<`, `=`, `≠` instead of "is greater than", "is less than", "equals", "is not equal to".
+- Use `→ correct` / `→ wrong` as option verdicts in MC reasoning.
+
+### Conditional Branch Compression
+
+For if/else reasoning, use inline format rather than separate paragraphs:
+
+- `if X → Y; else → Z` instead of writing out both branches as full sentences.
+- Merge short conditional branches into one fragment: `X or Y → same conclusion`.
+
 ## Compression Quality Bar
 
 A compressed trace is valid only if it meets these criteria:
@@ -120,7 +145,27 @@ Let's look at the options. Option A is evaporation, Option B is condensation, Op
 **Compressed Grug Reasoning:**
 
 ```text
-Options A evap, B cond, C precip, D transp. Need gas (vapor) to liquid. Evap L->G, cond G->L. Precipitation falling, transp plant. Condensation match B.
+Need vapor (G) → liquid. A: evap L→G, wrong. B: cond G→L, match. C: precip falling, wrong. D: transp plant, wrong. B correct.
+```
+
+### Example 5b: Multiple Choice Elimination (LogiQA Style)
+
+For MC reasoning, wrong options get a **one-word verdict only** (`unrelated`, `irrelevant`, `weaker`, `wrong`, `opposite`). Reserve explanation for the correct option.
+
+**Verbose Chain of Thought:**
+
+```text
+Option A: high humidity in tropical forests, doesn't directly address why lightning doesn't cause fires.
+Option B: vine coverage increase, doesn't explain why lightning doesn't cause fires.
+Option C: vine stems have low resistance, conduct lightning like a rod, current flows through stem protecting trees above from high voltage damage. Directly explains why many strikes don't cause fires.
+Option D: lightning damages external vines protecting middle trees, about damage resistance but doesn't explain reduced fires like C.
+C best, directly supports conclusion via environmental resistance preventing fire.
+```
+
+**Compressed Grug Reasoning:**
+
+```text
+A: humidity, unrelated. B: vine coverage, unrelated. C: vine stems low resistance → current flows → trees protected → no fire → correct. D: vine damage, not fires, weaker. C.
 ```
 
 ### Example 6: StrategyQA Reasoning
@@ -148,7 +193,7 @@ The passage states that the Pacific Ocean is the largest and deepest ocean on Ea
 **Compressed Grug Reasoning:**
 
 ```text
-Passage Pacific largest ocean, covers >30% Earth surface. Question asks >50% surface. 30% < 50%, so not more than half.
+Pacific largest ocean, >30% surface. Question asks >50%. 30% < 50% → no.
 ```
 
 ### Example 8: Formal Logic Reading Comprehension (LogiQA)
@@ -189,3 +234,33 @@ conclusion: metal spoon
 ```
 
 **Why invalid:** Uses key-value labels and line breaks instead of continuous telegraphic fragments.
+
+### Anti-Pattern 3: Passage meta-commentary
+
+**Verbose:** The passage states that penguins live in the southern hemisphere. The text says they do not live in the Arctic.
+
+**Bad compression:** Passage states penguins southern hemisphere. Text says not Arctic.
+
+**Good compression:** Penguins southern hemisphere, not Arctic.
+
+**Why invalid:** "Passage states" and "Text says" are banned meta-commentary — cite the claim, not its source.
+
+### Anti-Pattern 4: MC verbose option elimination
+
+**Verbose:** Option A is wrong because it does not address the main issue. Option B is irrelevant to the argument. Option C is correct because it directly supports the claim.
+
+**Bad compression:** A: does not address main issue, wrong. B: irrelevant to argument, incorrect. C: directly supports claim, correct.
+
+**Good compression:** A: unrelated. B: irrelevant. C: directly supports → correct.
+
+**Why invalid:** Wrong options need only a one-word verdict. Full-sentence elimination prose wastes tokens without adding logical content.
+
+### Anti-Pattern 5: Relational filler instead of arrow notation
+
+**Verbose:** Since the vine stems have low resistance, this means current flows through them, which implies trees are protected from high voltage.
+
+**Bad compression:** Vine stems low resistance, which means current flows, which implies trees protected.
+
+**Good compression:** Vine stems low resistance → current flows → trees protected.
+
+**Why invalid:** "which means" and "which implies" are banned filler. Use `→` chains.
