@@ -13,12 +13,12 @@ run:
 dataset:
   train_split_ratio: 0.9  # 900 train / 100 valid (total 1,000)
   sample_sizes:
-    strategyqa: 170
-    logiqa: 150
-    boolq: 130
-    anli: 200
-    piqa: 150
-    reclor: 200
+    strategyqa: 680
+    logiqa: 600
+    boolq: 520
+    anli: 800
+    piqa: 600
+    reclor: 800
 
 paths:
   # Base directories

@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Tuple
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
+from scripts.grug_score import calculate_grug_score
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -17,8 +18,8 @@ logger = logging.getLogger("validate_traces")
 KEY_VALUE_PATTERN = re.compile(r"^\s*\w+\s*:", re.MULTILINE)
 NUMBER_PATTERN = re.compile(r"\b\d+\.?\d*\b")
 OPTION_LETTER_PATTERN = re.compile(r"\b[ABCD]\b")
-SKIP_LOW_NUM_FRAGMEMENTS = True
-SKIP_KEY_VALUE_PATTERN = True
+SKIP_LOW_NUM_FRAGMEMENTS = False
+SKIP_KEY_VALUE_PATTERN = False
 
 FORBIDDEN_ANSWER_PHRASES = [
     "therefore the answer is",
@@ -201,17 +202,8 @@ def validate_record(record: Dict[str, Any]) -> Tuple[bool, str]:
         return False, reason
 
     raw_words = len(raw_thinking.split())
-    comp_words = len(compressed_thinking.split())
-
     if raw_words == 0:
         return False, "Raw thinking block has 0 words"
-
-    ratio = comp_words / raw_words
-    if ratio > 0.55:
-        return (
-            False,
-            f"Compression ratio too high: {ratio:.2f} (raw words: {raw_words}, compressed words: {comp_words})",
-        )
 
     comp_lower = compressed_thinking.lower()
     for phrase in FORBIDDEN_ANSWER_PHRASES:
@@ -225,6 +217,23 @@ def validate_record(record: Dict[str, Any]) -> Tuple[bool, str]:
     logic_ok, logic_reason = check_logic_steps_preserved(raw_thinking, compressed_thinking, source)
     if not logic_ok:
         return False, logic_reason
+
+    # Calculate Grug score and metrics
+    grug_score_val, grug_metrics = calculate_grug_score(raw_thinking, compressed_thinking, config.model_mlx_path)
+    record["grug_score"] = grug_score_val
+    record["grug_metrics"] = grug_metrics
+
+    # Token ratio check (hard fail)
+    token_ratio = grug_metrics["compression_ratio"]
+    if token_ratio > 0.50:
+        return (
+            False,
+            f"Compression ratio too high: {token_ratio:.2%}",
+        )
+
+    # Grug score check (auto-reject)
+    if grug_score_val < 0.70:
+        return False, f"Grug score below 0.70: {grug_score_val:.2f}"
 
     return True, "Passed"
 
@@ -253,9 +262,21 @@ def main() -> None:
 
     accepted_records: List[Dict[str, Any]] = []
     rejected_stats: Dict[str, int] = {}
+    all_scores: List[Dict[str, Any]] = []
 
     for record in records:
         is_valid, reason = validate_record(record)
+        
+        score_info = {
+            "id": record["id"],
+            "source": record["source"],
+            "passed": is_valid,
+            "reason": reason,
+            "grug_score": record.get("grug_score"),
+            "metrics": record.get("grug_metrics")
+        }
+        all_scores.append(score_info)
+
         if is_valid:
             accepted_records.append(record)
         else:
@@ -288,6 +309,7 @@ def main() -> None:
         "rejected": total - accepted_count,
         "rejection_rate": rejection_rate,
         "rejection_reasons": rejected_stats,
+        "scores": all_scores
     }
     with open(report_path, "w", encoding="utf-8") as rf:
         json.dump(report_data, rf, indent=2)

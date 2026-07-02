@@ -428,12 +428,12 @@ def main() -> None:
     all_prompts: List[Dict[str, Any]] = []
     
     # 4. Extract samples
-    all_prompts.extend(sample_strategyqa(blocklist, sample_sizes.get("strategyqa", 170)))
-    all_prompts.extend(sample_logiqa(blocklist, sample_sizes.get("logiqa", 150)))
-    all_prompts.extend(sample_boolq(blocklist, sample_sizes.get("boolq", 130)))
-    all_prompts.extend(sample_anli(blocklist, sample_sizes.get("anli", 200)))
-    all_prompts.extend(sample_piqa(blocklist, sample_sizes.get("piqa", 150)))
-    all_prompts.extend(sample_reclor(blocklist, sample_sizes.get("reclor", 200)))
+    all_prompts.extend(sample_strategyqa(blocklist, sample_sizes.get("strategyqa", 680)))
+    all_prompts.extend(sample_logiqa(blocklist, sample_sizes.get("logiqa", 600)))
+    all_prompts.extend(sample_boolq(blocklist, sample_sizes.get("boolq", 520)))
+    all_prompts.extend(sample_anli(blocklist, sample_sizes.get("anli", 800)))
+    all_prompts.extend(sample_piqa(blocklist, sample_sizes.get("piqa", 600)))
+    all_prompts.extend(sample_reclor(blocklist, sample_sizes.get("reclor", 800)))
     
     # Shuffle the final compiled dataset pool to keep it source-stratified but randomized
     # Wait, the instruction says: "Keep unsplit prompt pool; split train/valid only after filtering for correct model answers"
