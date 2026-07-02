@@ -1,7 +1,9 @@
 target_model:
   name: deepseek-r1-1.5b
   mlx_path: mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit
+  hf_path: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
   size: 1.5b
+  quantized: true
 
 run:
   seed: 42

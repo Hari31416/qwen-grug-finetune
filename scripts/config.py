@@ -27,10 +27,12 @@ class AppConfig:
         target_model: Dict[str, Any] = self._raw_config.get("target_model", {})
         self.model_name: str = target_model.get("name", "")
         self.model_mlx_path: str = target_model.get("mlx_path", "")
+        self.model_hf_path: str = target_model.get("hf_path", "")
         self.model_size: str = target_model.get("size", "")
+        self.model_quantized: bool = target_model.get("quantized", False)
 
-        if not self.model_name or not self.model_mlx_path:
-            raise ValueError("Target model 'name' and 'mlx_path' must be specified in config.yaml")
+        if not self.model_name:
+            raise ValueError("Target model 'name' must be specified in config.yaml")
 
         # Extract Run parameters
         run: Dict[str, Any] = self._raw_config.get("run", {})
@@ -131,7 +133,9 @@ if __name__ == "__main__":
     logger.info("--- Configuration Setup Report ---")
     logger.info("Target Model Name: %s", config.model_name)
     logger.info("MLX Model Path:    %s", config.model_mlx_path)
+    logger.info("HF Model Path:     %s", config.model_hf_path)
     logger.info("Model Size:        %s", config.model_size)
+    logger.info("Model Quantized:   %s", config.model_quantized)
     logger.info("Dataset Sizes:     %s", config.dataset_sample_sizes)
     logger.info("Run parameters:    Seed=%d, Temp=%.2f, TopP=%.2f", config.seed, config.temperature, config.top_p)
 
