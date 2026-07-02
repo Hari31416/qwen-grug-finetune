@@ -294,13 +294,13 @@ Initially, we ran the raw trace generation using the target `Qwen3.5-0.8B-OptiQ-
 ### What Worked
 
 - Successful model evaluation and adapter loading.
-- Observed a **65.3% reduction** in emitted thinking tokens for Grug style reasoning (from **481.2** down to **166.8** tokens on average), which directly translated to a **45.6% speedup** in overall inference latency (from **1.47s** down to **0.80s**).
-- Format compliance rate remained steady at **92.0%** under Grug prompting, and improved from **98.0%** to **99.0%** under normal prompting.
+- Observed a **76.6% reduction** in emitted thinking tokens for Grug style reasoning (from **512.8** down to **120.0** tokens on average), which directly translated to a **47.6% speedup** in overall inference latency (from **1.21s** down to **0.64s**).
+- Format compliance rate improved from **91.5%** to **95.1%** under Grug prompting, and improved from **96.6%** to **98.9%** under normal prompting.
 - Verified side-by-side comparison metrics:
 
   | Metric               | Base normal | Base Grug prompt | FT normal | FT Grug prompt |
   | :------------------- | :---------- | :--------------- | :-------- | :------------- |
-  | Accuracy             | 73.0%       | 70.0%            | 62.0%     | 40.0%          |
-  | Mean thinking tokens | 205.0       | 481.2            | 164.3     | 166.8          |
-  | Mean total tokens    | 476.0       | 545.3            | 392.4     | 247.8          |
-  | Format compliance    | 98.0%       | 92.0%            | 99.0%     | 92.0%          |
+  | Accuracy             | 64.9%       | 67.2%            | 66.0%     | 45.6%          |
+  | Mean thinking tokens | 219.0       | 512.8            | 156.2     | 120.0          |
+  | Mean total tokens    | 477.4       | 581.1            | 389.3     | 229.0          |
+  | Format compliance    | 96.6%       | 91.5%            | 98.9%     | 95.1%          |

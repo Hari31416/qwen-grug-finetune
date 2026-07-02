@@ -229,11 +229,11 @@ python scripts/eval.py --benchmark gsm8k --split test
 - [x] Compare side by side:
 
   | Metric                    | Base normal | Base Grug prompt | FT normal | FT Grug prompt |
-  | ------------------------- | ----------- | ---------------- | --------- | -------------- |
-  | Accuracy                  | 73.0%       | 70.0%            | 62.0%     | 40.0%          |
-  | Mean thinking tokens      | 205.0       | 481.2            | 164.3     | 166.8          |
-  | Mean total tokens         | 476.0       | 545.3            | 392.4     | 247.8          |
-  | Format compliance         | 98.0%       | 92.0%            | 99.0%     | 92.0%          |
+  | :------------------------ | :---------- | :--------------- | :-------- | :------------- |
+  | Accuracy                  | 64.9%       | 67.2%            | 66.0%     | 45.6%          |
+  | Mean thinking tokens      | 219.0       | 512.8            | 156.2     | 120.0          |
+  | Mean total tokens         | 477.4       | 581.1            | 389.3     | 229.0          |
+  | Format compliance         | 96.6%       | 91.5%            | 98.9%     | 95.1%          |
 
 **Milestone:** Answer — did Grug style transfer without hurting GSM8K accuracy?
 
