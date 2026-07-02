@@ -13,7 +13,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("compress_traces")
 
 # Load environment variables
@@ -44,7 +46,9 @@ def load_compression_system_prompt() -> str:
     )
 
 
-def build_compressed_record(record: Dict[str, Any], compressed_thinking: str) -> Dict[str, Any]:
+def build_compressed_record(
+    record: Dict[str, Any], compressed_thinking: str
+) -> Dict[str, Any]:
     """Build a compressed trace record from a raw record and compressed thinking text."""
     return {
         "id": record["id"],
@@ -80,10 +84,10 @@ async def compress_trace(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": raw_thinking}
+                    {"role": "user", "content": raw_thinking},
                 ],
                 temperature=0.1,
-                max_tokens=2048
+                max_tokens=2048,
             )
             msg = response.choices[0].message
             if msg.content:
@@ -106,20 +110,27 @@ async def compress_record(
         client, model, record["raw_thinking"], system_prompt, semaphore
     )
     if not compressed_thinking:
-        logger.warning("Skipping ID=%s due to empty or failed compression output.", record["id"])
+        logger.warning(
+            "Skipping ID=%s due to empty or failed compression output.", record["id"]
+        )
         return None
     return build_compressed_record(record, compressed_thinking)
 
 
-async def main_async(limit: int = None, concurrency: int = 5, batch_size: int = 10) -> None:
+async def main_async(
+    limit: int = None, concurrency: int = 5, batch_size: int = 10
+) -> None:
     # Set up directories
     config.setup_directories()
-    
+
     raw_traces_file = os.path.join(config.raw_traces, "traces.jsonl")
     compressed_traces_file = os.path.join(config.compressed_traces, "traces.jsonl")
-    
+
     if not os.path.exists(raw_traces_file):
-        logger.error("Raw traces file not found at: %s. Please run generate_traces.py first.", raw_traces_file)
+        logger.error(
+            "Raw traces file not found at: %s. Please run generate_traces.py first.",
+            raw_traces_file,
+        )
         sys.exit(1)
 
     # Load raw traces
@@ -130,13 +141,13 @@ async def main_async(limit: int = None, concurrency: int = 5, batch_size: int = 
                 record = json.loads(line.strip())
                 if record.get("raw_answer_correct") is True:
                     raw_records.append(record)
-                
+
     logger.info("Loaded %d raw traces from %s.", len(raw_records), raw_traces_file)
-    
+
     if limit is not None:
         raw_records = raw_records[:limit]
         logger.info("Limiting compression to the first %d traces.", limit)
-        
+
     # Read existing compressed traces to enable resume
     existing_ids: Set[str] = set()
     if os.path.exists(compressed_traces_file):
@@ -148,15 +159,21 @@ async def main_async(limit: int = None, concurrency: int = 5, batch_size: int = 
                         existing_ids.add(record["id"])
                     except json.JSONDecodeError:
                         continue
-        logger.info("Found %d already compressed traces. Resuming...", len(existing_ids))
-        
+        logger.info(
+            "Found %d already compressed traces. Resuming...", len(existing_ids)
+        )
+
     # Filter remaining records
     records_to_compress = [r for r in raw_records if r["id"] not in existing_ids]
     if not records_to_compress:
         logger.info("All records already compressed! Nothing to do.")
         return
 
-    logger.info("Compressing %d traces using API concurrency limit of %d...", len(records_to_compress), concurrency)
+    logger.info(
+        "Compressing %d traces using API concurrency limit of %d...",
+        len(records_to_compress),
+        concurrency,
+    )
 
     system_prompt = load_compression_system_prompt()
     logger.info("Loaded compression system prompt from %s.", STYLE_GUIDE_PATH)
@@ -191,8 +208,14 @@ async def main_async(limit: int = None, concurrency: int = 5, batch_size: int = 
     pending_batch: List[Dict[str, Any]] = []
     total_to_compress = len(records_to_compress)
 
+    from tqdm import tqdm
+
     with open(compressed_traces_file, "a", encoding="utf-8") as out_f:
-        for completed in asyncio.as_completed(tasks):
+        for completed in tqdm(
+            asyncio.as_completed(tasks),
+            total=total_to_compress,
+            desc="Compressing traces",
+        ):
             compressed_record = await completed
             if compressed_record is None:
                 continue
@@ -201,21 +224,33 @@ async def main_async(limit: int = None, concurrency: int = 5, batch_size: int = 
             if len(pending_batch) >= batch_size:
                 write_compressed_batch(out_f, pending_batch)
                 saved_count += len(pending_batch)
-                logger.info("Saved %d/%d compressed traces.", saved_count, total_to_compress)
+                tqdm.write(
+                    f"Saved {saved_count}/{total_to_compress} compressed traces."
+                )
                 pending_batch.clear()
 
         if pending_batch:
             write_compressed_batch(out_f, pending_batch)
             saved_count += len(pending_batch)
-            logger.info("Saved %d/%d compressed traces.", saved_count, total_to_compress)
+            tqdm.write(f"Saved {saved_count}/{total_to_compress} compressed traces.")
 
-    logger.info("Trace compression complete! Saved %d traces to %s.", saved_count, compressed_traces_file)
+    logger.info(
+        "Trace compression complete! Saved %d traces to %s.",
+        saved_count,
+        compressed_traces_file,
+    )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Compress raw CoT traces into Grug-style telegraphic thinking blocks.")
-    parser.add_argument("--limit", type=int, default=None, help="Limit number of traces to compress")
-    parser.add_argument("--concurrency", type=int, default=3, help="Number of concurrent API requests")
+    parser = argparse.ArgumentParser(
+        description="Compress raw CoT traces into Grug-style telegraphic thinking blocks."
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Limit number of traces to compress"
+    )
+    parser.add_argument(
+        "--concurrency", type=int, default=3, help="Number of concurrent API requests"
+    )
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -225,7 +260,9 @@ def main() -> None:
     args = parser.parse_args()
 
     asyncio.run(
-        main_async(limit=args.limit, concurrency=args.concurrency, batch_size=args.batch_size)
+        main_async(
+            limit=args.limit, concurrency=args.concurrency, batch_size=args.batch_size
+        )
     )
 
 

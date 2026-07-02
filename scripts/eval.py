@@ -18,19 +18,21 @@ from scripts.generation_utils import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("eval")
 
 from mlx_lm import stream_generate, batch_generate
 from datasets import load_dataset
 
 GRUG_SYSTEM_PROMPT: str = (
-    "You must write your thinking process in a token-efficient, telegraphic \"Grug\" style using short, sentence-fragment-based prose.\n"
+    'You must write your thinking process in a token-efficient, telegraphic "Grug" style using short, sentence-fragment-based prose.\n'
     "Follow these style rules exactly:\n"
-    "- Drop articles like \"the\" and \"a\" where possible.\n"
+    '- Drop articles like "the" and "a" where possible.\n'
     "- Use telegraphic fragments rather than complete sentences.\n"
     "- Keep numbers, equations, math symbols, variables, and code tokens exactly intact.\n"
-    "- Avoid any meta-commentary, filler phrasing, self-corrections, or back-tracking markers (e.g., \"wait...\", \"okay...\", \"let us see\").\n"
+    '- Avoid any meta-commentary, filler phrasing, self-corrections, or back-tracking markers (e.g., "wait...", "okay...", "let us see").\n'
     "- Keep logical transitions and step-by-step intermediate derivations. Never skip steps to make reasoning shorter; only make the phrasing of those steps shorter.\n"
     "- Do not repeat statements.\n"
     "- Output only the thinking process in this style, and then end the thinking block with </think>."
@@ -157,22 +159,31 @@ def main() -> None:
                 ]
                 # Filter directories containing adapter files
                 valid_subdirs = [
-                    sd for sd in subdirs if os.path.exists(os.path.join(sd, "adapters.safetensors"))
+                    sd
+                    for sd in subdirs
+                    if os.path.exists(os.path.join(sd, "adapters.safetensors"))
                 ]
                 if valid_subdirs:
                     resolved_latest = max(valid_subdirs)
-            
+
             if resolved_latest:
                 adapter_path = resolved_latest
-                logger.info("Automatically resolved latest adapter path: %s", adapter_path)
+                logger.info(
+                    "Automatically resolved latest adapter path: %s", adapter_path
+                )
             else:
                 adapter_path = base_adapter_dir
-                logger.info("No timestamped adapter subdirectories found. Using default adapter path: %s", adapter_path)
+                logger.info(
+                    "No timestamped adapter subdirectories found. Using default adapter path: %s",
+                    adapter_path,
+                )
     else:
         logger.info("Loading base model: %s", config.model_mlx_path)
 
     # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer(config.model_mlx_path, adapter_path=adapter_path)
+    model, tokenizer = load_model_and_tokenizer(
+        config.model_mlx_path, adapter_path=adapter_path
+    )
 
     # Load benchmark dataset
     if args.benchmark == "gsm8k":
@@ -240,7 +251,9 @@ def main() -> None:
             output_text = batch_response.texts[i - 1]
 
             # Parse thinking block
-            thinking_content, answer_content = parse_thinking_and_answer(output_text, strip_prefix=False)
+            thinking_content, answer_content = parse_thinking_and_answer(
+                output_text, strip_prefix=False
+            )
             format_compliance = len(answer_content) > 0
 
             thinking_tokens = len(tokenizer.encode(thinking_content))
@@ -267,7 +280,9 @@ def main() -> None:
                 "answer_tokens": answer_tokens,
                 "total_tokens": total_tokens,
                 "latency_seconds": avg_latency,
-                "tokens_per_second": total_tokens / avg_latency if avg_latency > 0 else 0.0,
+                "tokens_per_second": (
+                    total_tokens / avg_latency if avg_latency > 0 else 0.0
+                ),
                 "format_compliance": format_compliance,
             }
             results.append(record)
@@ -284,7 +299,9 @@ def main() -> None:
                 ground_truth,
             )
     else:
-        for i, row in enumerate(samples, 1):
+        from tqdm import tqdm
+
+        for i, row in enumerate(tqdm(samples, desc="Evaluating"), 1):
             question = row["question"]
             raw_ground_truth = row["answer"]
             ground_truth = raw_ground_truth.split("####")[-1].strip()
@@ -318,13 +335,15 @@ def main() -> None:
                     output_text += response.text
                     last_response = response
             except Exception as e:
-                logger.error("Error during generation for sample %d: %s", i, e)
+                tqdm.write(f"Error during generation for sample {i}: {e}")
                 continue
 
             latency_seconds = time.perf_counter() - start_time
 
             # Parse thinking block
-            thinking_content, answer_content = parse_thinking_and_answer(output_text, strip_prefix=False)
+            thinking_content, answer_content = parse_thinking_and_answer(
+                output_text, strip_prefix=False
+            )
             format_compliance = len(answer_content) > 0
 
             # Token counts
@@ -363,16 +382,8 @@ def main() -> None:
             }
             results.append(record)
 
-            logger.info(
-                "[%d/%d] Acc: %s | Think Tok: %d | Ans Tok: %d | Compl: %s | Pred: %s | GT: %s",
-                i,
-                len(samples),
-                "✓" if correct else "✗",
-                thinking_tokens,
-                answer_tokens,
-                "✓" if format_compliance else "✗",
-                predicted_answer,
-                ground_truth,
+            tqdm.write(
+                f"[{i}/{len(samples)}] Acc: {'✓' if correct else '✗'} | Think Tok: {thinking_tokens} | Ans Tok: {answer_tokens} | Compl: {'✓' if format_compliance else '✗'} | Pred: {predicted_answer} | GT: {ground_truth}"
             )
 
     # Compute summary statistics
@@ -388,7 +399,9 @@ def main() -> None:
         mean_answer_tokens = sum(r["answer_tokens"] for r in results) / total_count
         mean_total_tokens = sum(r["total_tokens"] for r in results) / total_count
         mean_latency = sum(r["latency_seconds"] for r in results) / total_count
-        mean_tokens_per_second = sum(r["tokens_per_second"] for r in results) / total_count
+        mean_tokens_per_second = (
+            sum(r["tokens_per_second"] for r in results) / total_count
+        )
     else:
         accuracy = 0.0
         format_compliance_rate = 0.0
@@ -402,8 +415,15 @@ def main() -> None:
 
     logger.info("=== Evaluation Summary ===")
     logger.info("Sample Count:           %d", total_count)
-    logger.info("Accuracy:               %.4f (%d/%d)", accuracy, correct_count, total_count)
-    logger.info("Format Compliance:      %.4f (%d/%d)", format_compliance_rate, format_compliant_count, total_count)
+    logger.info(
+        "Accuracy:               %.4f (%d/%d)", accuracy, correct_count, total_count
+    )
+    logger.info(
+        "Format Compliance:      %.4f (%d/%d)",
+        format_compliance_rate,
+        format_compliant_count,
+        total_count,
+    )
     logger.info("Mean Thinking Tokens:   %.2f", mean_thinking_tokens)
     logger.info("Mean Answer Tokens:     %.2f", mean_answer_tokens)
     logger.info("Mean Total Tokens:      %.2f", mean_total_tokens)

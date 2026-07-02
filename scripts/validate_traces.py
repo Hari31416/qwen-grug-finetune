@@ -12,7 +12,9 @@ from scripts.config import config
 from scripts.grug_score import calculate_grug_score
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("validate_traces")
 
 KEY_VALUE_PATTERN = re.compile(r"^\s*\w+\s*:", re.MULTILINE)
@@ -124,7 +126,9 @@ def is_parseable(compressed_thinking: str) -> Tuple[bool, str]:
     if stripped.startswith("```") and stripped.endswith("```"):
         return False, "Compressed thinking is only a markdown code block"
 
-    if stripped.lower().startswith("compressed reasoning:") or stripped.lower().startswith("grug reasoning:"):
+    if stripped.lower().startswith(
+        "compressed reasoning:"
+    ) or stripped.lower().startswith("grug reasoning:"):
         return False, "Compressed thinking contains wrapper labels"
 
     if is_incomplete_compression(stripped):
@@ -208,18 +212,25 @@ def validate_record(record: Dict[str, Any]) -> Tuple[bool, str]:
     comp_lower = compressed_thinking.lower()
     for phrase in FORBIDDEN_ANSWER_PHRASES:
         if phrase in comp_lower:
-            return False, f"Compressed thinking contains answer restatement phrase: '{phrase}'"
+            return (
+                False,
+                f"Compressed thinking contains answer restatement phrase: '{phrase}'",
+            )
 
     raw_ans_clean = record.get("raw_answer", "").strip().lower()
     if raw_ans_clean and comp_lower.endswith(f"answer is {raw_ans_clean}"):
         return False, "Compressed thinking ends with answer restatement"
 
-    logic_ok, logic_reason = check_logic_steps_preserved(raw_thinking, compressed_thinking, source)
+    logic_ok, logic_reason = check_logic_steps_preserved(
+        raw_thinking, compressed_thinking, source
+    )
     if not logic_ok:
         return False, logic_reason
 
     # Calculate Grug score and metrics
-    grug_score_val, grug_metrics = calculate_grug_score(raw_thinking, compressed_thinking, config.model_mlx_path)
+    grug_score_val, grug_metrics = calculate_grug_score(
+        raw_thinking, compressed_thinking, config.model_mlx_path
+    )
     record["grug_score"] = grug_score_val
     record["grug_metrics"] = grug_metrics
 
@@ -239,15 +250,22 @@ def validate_record(record: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate compressed CoT traces against style guide rules.")
-    parser.add_argument("--report", action="store_true", help="Print detailed validation report")
+    parser = argparse.ArgumentParser(
+        description="Validate compressed CoT traces against style guide rules."
+    )
+    parser.add_argument(
+        "--report", action="store_true", help="Print detailed validation report"
+    )
     args = parser.parse_args()
 
     compressed_file = os.path.join(config.compressed_traces, "traces.jsonl")
     validated_file = os.path.join(config.validated_traces, "traces.jsonl")
 
     if not os.path.exists(compressed_file):
-        logger.error("Compressed traces file not found at: %s. Please run compress_traces.py first.", compressed_file)
+        logger.error(
+            "Compressed traces file not found at: %s. Please run compress_traces.py first.",
+            compressed_file,
+        )
         sys.exit(1)
 
     os.makedirs(config.validated_traces, exist_ok=True)
@@ -264,16 +282,18 @@ def main() -> None:
     rejected_stats: Dict[str, int] = {}
     all_scores: List[Dict[str, Any]] = []
 
-    for record in records:
+    from tqdm import tqdm
+
+    for record in tqdm(records, desc="Validating traces"):
         is_valid, reason = validate_record(record)
-        
+
         score_info = {
             "id": record["id"],
             "source": record["source"],
             "passed": is_valid,
             "reason": reason,
             "grug_score": record.get("grug_score"),
-            "metrics": record.get("grug_metrics")
+            "metrics": record.get("grug_metrics"),
         }
         all_scores.append(score_info)
 
@@ -282,7 +302,7 @@ def main() -> None:
         else:
             rejected_stats[reason] = rejected_stats.get(reason, 0) + 1
             if args.report:
-                logger.info("Rejected ID=%s. Reason: %s", record["id"], reason)
+                tqdm.write(f"Rejected ID={record['id']}. Reason: {reason}")
 
     with open(validated_file, "w", encoding="utf-8") as out_f:
         for record in accepted_records:
@@ -309,7 +329,7 @@ def main() -> None:
         "rejected": total - accepted_count,
         "rejection_rate": rejection_rate,
         "rejection_reasons": rejected_stats,
-        "scores": all_scores
+        "scores": all_scores,
     }
     with open(report_path, "w", encoding="utf-8") as rf:
         json.dump(report_data, rf, indent=2)

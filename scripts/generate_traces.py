@@ -8,7 +8,11 @@ from typing import Dict, Any, Set, List
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.config import config
-from scripts.prompt_utils import build_user_prompt, extract_predicted_answer, is_correct_answer
+from scripts.prompt_utils import (
+    build_user_prompt,
+    extract_predicted_answer,
+    is_correct_answer,
+)
 from scripts.generation_utils import (
     load_model_and_tokenizer,
     get_generation_parameters,
@@ -16,7 +20,9 @@ from scripts.generation_utils import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("generate_traces")
 
 
@@ -24,7 +30,9 @@ VALID_SOURCES = ("strategyqa", "logiqa", "boolq", "anli", "piqa", "reclor")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate raw CoT traces using target MLX model")
+    parser = argparse.ArgumentParser(
+        description="Generate raw CoT traces using target MLX model"
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -48,7 +56,10 @@ def main() -> None:
 
     # Load prompts
     if not os.path.exists(config.sft_prompts):
-        logger.error("Prompts file not found at: %s. Please run sample_sft_prompts.py first.", config.sft_prompts)
+        logger.error(
+            "Prompts file not found at: %s. Please run sample_sft_prompts.py first.",
+            config.sft_prompts,
+        )
         sys.exit(1)
 
     prompts: List[Dict[str, Any]] = []
@@ -68,7 +79,9 @@ def main() -> None:
 
     if args.limit is not None:
         prompts = prompts[: args.limit]
-        logger.info("Limiting execution to the first %d prompts for this run.", args.limit)
+        logger.info(
+            "Limiting execution to the first %d prompts for this run.", args.limit
+        )
 
     # Setup directories and determine output file path
     config.setup_directories()
@@ -86,12 +99,17 @@ def main() -> None:
                         existing_ids.add(record["id"])
                     except json.JSONDecodeError:
                         continue
-        logger.info("Found %d already generated traces. Skipping them (resume mode).", len(existing_ids))
+        logger.info(
+            "Found %d already generated traces. Skipping them (resume mode).",
+            len(existing_ids),
+        )
 
     # Filter out already processed prompts
     prompts_to_process = [p for p in prompts if p["id"] not in existing_ids]
     if not prompts_to_process:
-        logger.info("All prompts in target set have already been generated. Nothing to do!")
+        logger.info(
+            "All prompts in target set have already been generated. Nothing to do!"
+        )
         return
 
     logger.info("Processing %d prompts...", len(prompts_to_process))
@@ -112,14 +130,13 @@ def main() -> None:
         if args.batch_size > 1:
             logger.info("Running batch generation (batch_size=%d)...", args.batch_size)
             from mlx_lm import batch_generate
+            from tqdm import tqdm
 
+            pbar = tqdm(total=len(prompts_to_process), desc="Generating traces")
             for i in range(0, len(prompts_to_process), args.batch_size):
                 chunk = prompts_to_process[i : i + args.batch_size]
-                logger.info(
-                    "Processing batch %d-%d/%d...",
-                    i + 1,
-                    i + len(chunk),
-                    len(prompts_to_process),
+                tqdm.write(
+                    f"Processing batch {i + 1}-{i + len(chunk)}/{len(prompts_to_process)}..."
                 )
 
                 formatted_prompts = []
@@ -130,7 +147,10 @@ def main() -> None:
                     full_prompt_text = build_user_prompt(prompt_text, source, choices)
                     messages = [{"role": "user", "content": full_prompt_text}]
                     formatted_prompt = tokenizer.apply_chat_template(
-                        messages, tokenize=False, add_generation_prompt=True, enable_thinking=True
+                        messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        enable_thinking=True,
                     )
                     formatted_prompts.append(formatted_prompt)
 
@@ -156,17 +176,18 @@ def main() -> None:
                         ground_truth = prompt_item["ground_truth"]
                         output = batch_response.texts[j]
 
-                        raw_thinking, raw_answer = parse_thinking_and_answer(output, strip_prefix=True)
+                        raw_thinking, raw_answer = parse_thinking_and_answer(
+                            output, strip_prefix=True
+                        )
 
-                        is_correct = is_correct_answer(raw_answer, ground_truth, source, choices)
-                        extracted = extract_predicted_answer(raw_answer, source, choices)
-                        logger.info(
-                            "ID=%s -> Correct = %s (Predicted: %r, Extracted: %r, Ground Truth: %r)",
-                            prompt_id,
-                            is_correct,
-                            raw_answer,
-                            extracted,
-                            ground_truth,
+                        is_correct = is_correct_answer(
+                            raw_answer, ground_truth, source, choices
+                        )
+                        extracted = extract_predicted_answer(
+                            raw_answer, source, choices
+                        )
+                        tqdm.write(
+                            f"ID={prompt_id} -> Correct = {is_correct} (Predicted: {raw_answer!r}, Extracted: {extracted!r}, Ground Truth: {ground_truth!r})"
                         )
 
                         # Save record
@@ -183,13 +204,20 @@ def main() -> None:
 
                         out_f.write(json.dumps(record) + "\n")
                     out_f.flush()
+                    pbar.update(len(chunk))
 
                 except Exception as e:
-                    logger.error("Batch generation failed for batch starting at index %d: %s", i, e)
+                    tqdm.write(
+                        f"Batch generation failed for batch starting at index {i}: {e}"
+                    )
+                    pbar.update(len(chunk))
                     continue
+            pbar.close()
         else:
             from mlx_lm import generate
+            from tqdm import tqdm
 
+            pbar = tqdm(total=len(prompts_to_process), desc="Generating traces")
             for i, prompt_item in enumerate(prompts_to_process, 1):
                 prompt_id = prompt_item["id"]
                 source = prompt_item["source"]
@@ -197,12 +225,8 @@ def main() -> None:
                 choices = prompt_item.get("choices")
                 ground_truth = prompt_item["ground_truth"]
 
-                logger.info(
-                    "[%d/%d] Generating trace for ID=%s (Source=%s)...",
-                    i,
-                    len(prompts_to_process),
-                    prompt_id,
-                    source,
+                tqdm.write(
+                    f"[{i}/{len(prompts_to_process)}] Generating trace for ID={prompt_id} (Source={source})..."
                 )
 
                 full_prompt_text = build_user_prompt(prompt_text, source, choices)
@@ -210,7 +234,10 @@ def main() -> None:
                 # Format using tokenizer chat template with thinking enabled
                 messages = [{"role": "user", "content": full_prompt_text}]
                 formatted_prompt = tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True, enable_thinking=True
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=True,
                 )
 
                 # Generate output from model
@@ -225,20 +252,20 @@ def main() -> None:
                         verbose=False,
                     )
                 except Exception as e:
-                    logger.error("Generation failed for prompt %s: %s", prompt_id, e)
+                    tqdm.write(f"Generation failed for prompt {prompt_id}: {e}")
+                    pbar.update(1)
                     continue
 
-                raw_thinking, raw_answer = parse_thinking_and_answer(output, strip_prefix=True)
+                raw_thinking, raw_answer = parse_thinking_and_answer(
+                    output, strip_prefix=True
+                )
 
-                is_correct = is_correct_answer(raw_answer, ground_truth, source, choices)
+                is_correct = is_correct_answer(
+                    raw_answer, ground_truth, source, choices
+                )
                 extracted = extract_predicted_answer(raw_answer, source, choices)
-                logger.info(
-                    "ID=%s -> Correct = %s (Predicted: %r, Extracted: %r, Ground Truth: %r)",
-                    prompt_id,
-                    is_correct,
-                    raw_answer,
-                    extracted,
-                    ground_truth,
+                tqdm.write(
+                    f"ID={prompt_id} -> Correct = {is_correct} (Predicted: {raw_answer!r}, Extracted: {extracted!r}, Ground Truth: {ground_truth!r})"
                 )
 
                 # Save record
@@ -255,6 +282,8 @@ def main() -> None:
 
                 out_f.write(json.dumps(record) + "\n")
                 out_f.flush()
+                pbar.update(1)
+            pbar.close()
 
     logger.info("Trace generation complete. Results saved/appended to %s.", output_file)
 

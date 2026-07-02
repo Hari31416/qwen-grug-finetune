@@ -1991,6 +1991,7 @@ dependencies = [
     { name = "openai" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -2001,6 +2002,7 @@ requires-dist = [
     { name = "openai", specifier = "==2.44.0" },
     { name = "python-dotenv", specifier = "==1.2.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
+    { name = "tqdm", specifier = ">=4.68.3" },
 ]
 
 [[package]]
