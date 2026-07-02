@@ -21,7 +21,7 @@ KEY_VALUE_PATTERN = re.compile(r"^\s*\w+\s*:", re.MULTILINE)
 NUMBER_PATTERN = re.compile(r"\b\d+\.?\d*\b")
 OPTION_LETTER_PATTERN = re.compile(r"\b[ABCD]\b")
 SKIP_LOW_NUM_FRAGMEMENTS = False
-SKIP_KEY_VALUE_PATTERN = False
+SKIP_KEY_VALUE_PATTERN = True
 
 FORBIDDEN_ANSWER_PHRASES = [
     "therefore the answer is",
