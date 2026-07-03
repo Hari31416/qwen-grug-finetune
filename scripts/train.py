@@ -28,7 +28,7 @@ def run_training(
     lora_layers: Optional[int] = 16,
     train: bool = True,
     test: bool = False,
-    save_every: int = 20,
+    save_every: Optional[int] = None,
 ) -> None:
     """Invokes mlx_lm.lora finetuning script as a subprocess with dynamically resolved parameters."""
     if not os.path.exists(config_file):
@@ -48,11 +48,10 @@ def run_training(
         adapter_path,
         "-c",
         config_file,
-        "--save-every",
-        str(save_every),
-        "--steps-per-eval",
-        str(save_every),
     ]
+
+    if save_every is not None:
+        cmd.extend(["--save-every", str(save_every), "--steps-per-eval", str(save_every)])
 
     if train:
         cmd.append("--train")
@@ -266,8 +265,8 @@ def main() -> None:
     parser.add_argument(
         "--save-every",
         type=int,
-        default=20,
-        help="Interval in iterations to save snapshots and run validation (maps to --save-every and --steps-per-eval)",
+        default=None,
+        help="Override save/validation interval (maps to --save-every and --steps-per-eval; default: lora_config.yaml)",
     )
 
     parser.set_defaults(train=True)
@@ -295,7 +294,8 @@ def main() -> None:
     logger.info("  Data Directory:    %s", args.data)
     logger.info("  Config File:       %s", args.config_file)
     logger.info("  Num Layers:        %d", args.lora_layers)
-    logger.info("  Save & Eval Every: %d", args.save_every)
+    if args.save_every is not None:
+        logger.info("  Save & Eval Every: %d (CLI override)", args.save_every)
     if args.iters:
         logger.info("  Iters Override:    %d", args.iters)
     if args.batch_size:
@@ -316,9 +316,12 @@ def main() -> None:
         logger.info("  dropout:        %s", _lp.get("dropout", "—"))
         logger.info("  iters:          %s", args.iters if args.iters else _lora_cfg.get("iters", "—"))
         logger.info("  batch_size:     %s", args.batch_size if args.batch_size else _lora_cfg.get("batch_size", "—"))
+        logger.info("  grad_accum:     %s", _lora_cfg.get("grad_accumulation_steps", "—"))
+        logger.info("  grad_checkpoint:%s", _lora_cfg.get("grad_checkpoint", "—"))
         logger.info("  learning_rate:  %s", args.learning_rate if args.learning_rate else _lora_cfg.get("learning_rate", "—"))
-        logger.info("  save_every:     %s", args.save_every)
+        logger.info("  save_every:     %s", args.save_every if args.save_every is not None else _lora_cfg.get("save_every", "—"))
         logger.info("  steps_per_eval: %s", _lora_cfg.get("steps_per_eval", "—"))
+        logger.info("  val_batches:    %s", _lora_cfg.get("val_batches", "—"))
         logger.info("------------------------")
     except Exception as _e:
         logger.warning("Could not parse lora_config.yaml for display: %s", _e)
