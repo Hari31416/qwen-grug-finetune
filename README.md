@@ -15,6 +15,7 @@ The project has the following directory layout:
 - `results/` - Detailed evaluation outputs, generated samples, and metrics (gitignored).
 - `scripts/` - Pipeline Python scripts for trace generation, compression, training, evaluation, plotting, and syncing.
 - `SUMMARY.md` - Comprehensive summary of experimental findings, training strategies, and future scaling plans.
+- `STORY.md` - The narrative behind the project, motivating factors, experimental journey, and key takeaways.
 
 > [!NOTE]
 > Since the `data/`, `adapters/`, and `data-and-models/` directories are gitignored, you can download all training datasets, adapter weights, and evaluation reports directly from the Hugging Face repository: [hari31416/qwen-grug-finetune](https://huggingface.co/hari31416/qwen-grug-finetune).
