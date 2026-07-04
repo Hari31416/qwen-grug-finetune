@@ -1,4 +1,4 @@
-# Next Steps — Iteration 2
+# Next Steps and Iteration Plans
 
 This document defines the second experimental iteration after the results in [`report/`](./report/). The goal is to improve **telegraphic reasoning style transfer** while preserving benchmark accuracy — without re-introducing the Grug system prompt or Grug-prompt eval modes.
 
@@ -301,3 +301,29 @@ Documented here so we do not scope-creep now:
 - **Stage 2 traces** — stronger model as raw CoT source
 - **Inference-time techniques** — token caps, two-pass verify, penalty sweeps
 - **DoRA / extra LoRA layers** — only if rank-16 LoRA still shows weak style adoption
+
+## Iteration 3 — Mitigating Alignment Tax and Preserving Reasoning
+
+Following the Iteration 2 training run (which successfully mitigated prompt leakage and instruction regurgitation), we evaluated the model and observed an accuracy of **53%** (baseline is **78%** on 100 samples). This indicates a significant alignment tax where the model over-compresses math steps and drops crucial logical steps.
+
+### 3.1 Goals
+
+- Close the accuracy gap to ±3pp of the baseline (GSM8K target accuracy: **≥75%**).
+- Maintain style compression with a reduction in thinking tokens by **≥20%** compared to the baseline.
+- Prevent instruction regurgitation.
+
+### 3.2 Proposed Experiments
+
+- **Benchmark SFT Mixing (Task-Specific Data)**
+  - **Why:** The SFT dataset currently contains only general-reasoning datasets. The model has never seen math-specific (GSM8K) SFT examples in the target style.
+  - **What:** Add a portion of GSM8K training split traces to the SFT corpus (e.g., 500 GSM8K training questions generated and compressed in the Grug style) while strictly ensuring they do not overlap with the GSM8K test split.
+- **LoRA Capacity Reduction**
+  - **Why:** A LoRA rank of 16 targets all projection layers, allowing the adapter to override pre-trained attention weights too easily.
+  - **What:** Reduce rank to 8 or 4, and/or restrict LoRA target layers to only `q_proj` and `v_proj` to act as a stronger regularizer.
+- **Relaxed Dynamic Compression**
+  - **Why:** The 50% hard cutoff on thinking tokens in `validate_traces.py` forces extreme over-compression on complex math questions.
+  - **What:** Relax the compression threshold dynamically based on prompt complexity (e.g., allow up to 60-70% token length for long math steps, or use a multi-stage curriculum).
+- **Checkpoint Sweep Evaluation**
+  - **Why:** The model may overfit to style as epoch count increases.
+  - **What:** Evaluate intermediate checkpoints (e.g., every 50 steps from step 100 to 800) to identify the step where style transfer is learned before accuracy deteriorates.
+

@@ -16,13 +16,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger('format_data')
 
 # Fraction of records to mark as negative examples (raw/uncompressed thinking)
-NEGATIVE_EXAMPLE_FRACTION = 0.10
+NEGATIVE_EXAMPLE_FRACTION = 0.30
+# Fraction of positive examples where system prompt is omitted
+SYSTEM_PROMPT_DROPOUT = 0.20
+# Fraction of negative examples that include the system prompt
+NEGATIVE_SYSTEM_PROMPT_FRACTION = 0.50
 
 
 def format_record(
     record: Dict[str, Any],
     tokenizer: Any,
     sft_style: str,
+    include_system_prompt: bool,
 ) -> str | None:
     """Apply chat template to a single record and return the formatted training text.
 
@@ -30,6 +35,7 @@ def format_record(
         record: Validated trace record containing prompt, thinking, answer fields.
         tokenizer: Loaded tokenizer with apply_chat_template support.
         sft_style: Either 'compressed' (positive) or 'normal' (negative example).
+        include_system_prompt: Whether to prepend the STYLE_SYSTEM_PROMPT to the message history.
 
     Returns:
         Formatted text string ready for SFT, or None on failure.
@@ -55,9 +61,8 @@ def format_record(
     messages = [
         {'role': 'user', 'content': full_prompt},
     ]
-    # Positive examples get the style system prompt; negative examples have none so the
-    # model learns that STYLE_SYSTEM_PROMPT is a clean trigger for compact reasoning.
-    if sft_style == 'compressed':
+    # Prepend the style system prompt if required
+    if include_system_prompt:
         messages.insert(0, {'role': 'system', 'content': STYLE_SYSTEM_PROMPT})
 
     try:
@@ -80,7 +85,19 @@ def main() -> None:
         '--negative-fraction',
         type=float,
         default=NEGATIVE_EXAMPLE_FRACTION,
-        help='Fraction of records to use as negative (raw thinking) examples (default: 0.10)',
+        help='Fraction of records to use as negative (raw thinking) examples (default: 0.30)',
+    )
+    parser.add_argument(
+        '--system-prompt-dropout',
+        type=float,
+        default=SYSTEM_PROMPT_DROPOUT,
+        help='Fraction of positive examples where system prompt is omitted (default: 0.20)',
+    )
+    parser.add_argument(
+        '--negative-system-prompt-fraction',
+        type=float,
+        default=NEGATIVE_SYSTEM_PROMPT_FRACTION,
+        help='Fraction of negative examples that include the system prompt (default: 0.50)',
     )
     args = parser.parse_args()
 
@@ -119,25 +136,29 @@ def main() -> None:
     # Format ALL records as compressed positives first
     formatted_data: List[Dict[str, str]] = []
     for record in shuffled:
-        text = format_record(record, tokenizer, 'compressed')
+        # 1. System prompt dropout for positive examples
+        include_sys = random.random() >= args.system_prompt_dropout
+        text = format_record(record, tokenizer, 'compressed', include_system_prompt=include_sys)
         if text is not None:
             formatted_data.append({'text': text})
 
     n_positive = len(formatted_data)
     logger.info('Formatted %d positive (compressed) examples.', n_positive)
 
-    # Sample ~10% to ALSO add as negative (raw thinking) examples on top
+    # Sample negative (raw thinking) examples on top
     n_negative = max(1, int(len(shuffled) * args.negative_fraction)) if len(shuffled) > 1 else 0
     negative_pool = random.sample(shuffled, n_negative)
     n_added = 0
     for record in negative_pool:
-        text = format_record(record, tokenizer, 'normal')
+        # 2. Negative system prompt fraction
+        include_sys = random.random() < args.negative_system_prompt_fraction
+        text = format_record(record, tokenizer, 'normal', include_system_prompt=include_sys)
         if text is not None:
             formatted_data.append({'text': text})
             n_added += 1
 
     logger.info(
-        'Added %d negative (raw thinking, no system prompt) examples on top.',
+        'Added %d negative (raw thinking) examples on top.',
         n_added,
     )
     logger.info('Total formatted examples: %d', len(formatted_data))
