@@ -4,16 +4,19 @@ import { FolderOpen, Sparkles, UploadCloud } from "lucide-react"
 interface WelcomeBannerProps {
   onFilesSelected: (files: File[]) => void
   onLoadDemo: () => void
+  onLoadFromHF: (iterationId: string) => void
   isLoading: boolean
 }
 
 export function WelcomeBanner({
   onFilesSelected,
   onLoadDemo,
+  onLoadFromHF,
   isLoading,
 }: WelcomeBannerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [selectedIteration, setSelectedIteration] = useState<string>("iteration-2-regularized")
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -100,6 +103,30 @@ export function WelcomeBanner({
           <Sparkles className="h-4 w-4 text-amber-400" />
           Load Demo Data
         </button>
+      </div>
+
+      <div className="flex flex-col items-center gap-3 mt-4 border-t border-white/5 pt-6 w-full max-w-md">
+        <span className="text-xs text-gray-400 font-medium">Or load results directly from Hugging Face</span>
+        <div className="flex gap-2 w-full">
+          <select
+            value={selectedIteration}
+            onChange={(e) => setSelectedIteration(e.target.value)}
+            disabled={isLoading}
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          >
+            <option value="iteration-2-regularized" className="bg-[#0b0f19] text-gray-100">Iteration 2 (Regularized / Final)</option>
+            <option value="iteration-2-unregularized" className="bg-[#0b0f19] text-gray-100">Iteration 2 (Unregularized)</option>
+            <option value="iteration-1" className="bg-[#0b0f19] text-gray-100">Iteration 1 (Initial SFT)</option>
+          </select>
+          <button
+            onClick={() => onLoadFromHF(selectedIteration)}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4 text-blue-400" />
+            Load from HF
+          </button>
+        </div>
       </div>
     </div>
   )

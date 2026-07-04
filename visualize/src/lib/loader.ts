@@ -175,3 +175,55 @@ export function parseResultsJson(
     console.error("Error parsing results JSON:", err)
   }
 }
+
+export function enrichWorkspaceFromResults(data: WorkspaceData): void {
+  const prompts = data.prompts
+  const rawTraces = data.rawTraces
+  const compressedTraces = data.compressedTraces
+  const validatedTraces = data.validatedTraces
+
+  Object.values(data.results).forEach((run) => {
+    const isFinetuned = run.metadata.runType === "finetuned"
+    const benchmark = run.metadata.benchmark
+
+    run.results.forEach((item) => {
+      const id = `${benchmark}-${item.id}`
+
+      // Create prompts from results if missing
+      if (!prompts[id]) {
+        prompts[id] = {
+          id,
+          source: benchmark,
+          prompt: item.question,
+          ground_truth: item.ground_truth,
+        }
+      }
+
+      if (!isFinetuned) {
+        // Populate baseline raw trace
+        if (!rawTraces[id]) {
+          rawTraces[id] = {
+            id,
+            source: benchmark,
+            prompt: item.question,
+            raw_thinking: item.thinking_content || item.output || "",
+            raw_answer: item.answer_content || "",
+            raw_answer_correct: item.correct,
+          }
+        }
+      } else {
+        // Populate finetuned compressed trace
+        if (!compressedTraces[id]) {
+          compressedTraces[id] = {
+            id,
+            compressed_thinking: item.thinking_content || item.output || "",
+          }
+        }
+        // Also populate validated trace as placeholder
+        if (item.correct && !validatedTraces[id]) {
+          validatedTraces[id] = { id }
+        }
+      }
+    })
+  })
+}

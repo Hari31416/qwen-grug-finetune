@@ -8,6 +8,7 @@ import {
   parseValidatedTracesJsonl,
   parseSftFormattedJsonl,
   parseResultsJson,
+  enrichWorkspaceFromResults,
 } from "@/lib/loader"
 
 export function useWorkspace() {
@@ -352,12 +353,128 @@ export function useWorkspace() {
     setWorkspaceData(demo)
   }
 
+  const loadFromHF = async (iterationId: string) => {
+    setIsLoading(true)
+    setError(null)
+    const newWorkspace = createEmptyWorkspace()
+
+    try {
+      const baseUrl = `https://huggingface.co/hari31416/qwen-grug-finetune/resolve/main/${iterationId}`
+      const filesToFetch: { url: string; path: string; parser: (content: string) => void }[] = []
+
+      // SFT data (only for iteration-1 and iteration-2-regularized)
+      if (iterationId !== "iteration-2-unregularized") {
+        filesToFetch.push({
+          url: `${baseUrl}/data/train.jsonl`,
+          path: "data/train.jsonl",
+          parser: (content) => parseSftFormattedJsonl(content, "train", newWorkspace)
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/data/valid.jsonl`,
+          path: "data/valid.jsonl",
+          parser: (content) => parseSftFormattedJsonl(content, "valid", newWorkspace)
+        })
+      }
+
+      // Metrics / validation Report
+      filesToFetch.push({
+        url: `${baseUrl}/model/metrics.json`,
+        path: "model/metrics.json",
+        parser: (content) => {
+          try {
+            const parsed = JSON.parse(content)
+            newWorkspace.validationReport = {
+              total_checked: parsed.train_steps ? parsed.train_steps[parsed.train_steps.length - 1] : 1000,
+              accepted: parsed.val_losses ? Math.floor(parsed.val_losses[parsed.val_losses.length - 1] * 100) : 0,
+              rejected: 0,
+              rejection_rate: 0,
+            }
+          } catch (e) {
+            console.error("Error parsing metrics.json:", e)
+          }
+        }
+      })
+
+      // Results
+      if (iterationId === "iteration-1") {
+        filesToFetch.push({
+          url: `${baseUrl}/report/gsm8k_normal_baseline.json`,
+          path: "deepseek-r1-1.5b/baseline/gsm8k_normal.json",
+          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/baseline/gsm8k_normal.json", newWorkspace)
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/report/gsm8k_normal_finetuned.json`,
+          path: "deepseek-r1-1.5b/finetuned/gsm8k_normal.json",
+          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/finetuned/gsm8k_normal.json", newWorkspace)
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/report/gsm8k_grug_baseline.json`,
+          path: "deepseek-r1-1.5b/baseline/gsm8k_grug.json",
+          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/baseline/gsm8k_grug.json", newWorkspace)
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/report/gsm8k_grug_finetuned.json`,
+          path: "deepseek-r1-1.5b/finetuned/gsm8k_grug.json",
+          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/finetuned/gsm8k_grug.json", newWorkspace)
+        })
+      } else {
+        filesToFetch.push({
+          url: `${baseUrl}/report/gsm8k_baseline.json`,
+          path: "deepseek-r1-1.5b/baseline/gsm8k.json",
+          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/baseline/gsm8k.json", newWorkspace)
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/report/gsm8k_finetuned.json`,
+          path: "deepseek-r1-1.5b/finetuned/gsm8k.json",
+          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/finetuned/gsm8k.json", newWorkspace)
+        })
+      }
+
+      // Fetch all files
+      let filesLoaded = 0
+      await Promise.all(
+        filesToFetch.map(async (file) => {
+          try {
+            const response = await fetch(file.url)
+            if (!response.ok) {
+              console.warn(`Failed to fetch file: ${file.url} - ${response.statusText}`)
+              return
+            }
+            const content = await response.text()
+            file.parser(content)
+            filesLoaded++
+          } catch (e) {
+            console.error(`Error fetching/parsing ${file.url}:`, e)
+          }
+        })
+      )
+
+      if (filesLoaded > 0) {
+        enrichWorkspaceFromResults(newWorkspace)
+        const uniqueSources = new Set<string>()
+        Object.values(newWorkspace.prompts).forEach((p) => {
+          if (p.source) uniqueSources.add(p.source)
+        })
+        newWorkspace.sources = Array.from(uniqueSources)
+        newWorkspace.isDemo = false
+        setWorkspaceData(newWorkspace)
+      } else {
+        setError("Failed to load any files from Hugging Face for this iteration.")
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to load from Hugging Face.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return {
     workspaceData,
     isLoading,
     error,
     loadFromFiles,
     loadDemo,
+    loadFromHF,
     resetWorkspace,
   }
 }

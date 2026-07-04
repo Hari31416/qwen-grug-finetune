@@ -16,6 +16,7 @@ export function App() {
     error,
     loadFromFiles,
     loadDemo,
+    loadFromHF,
   } = useWorkspace()
 
   const [activeTab, setActiveTab] = useState<"overview" | "explorer" | "analytics" | "results" | "styleguide">("overview")
@@ -189,14 +190,27 @@ export function App() {
           />
           
           {isDataLoaded && (
-            <button
-              onClick={triggerPicker}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium text-xs transition-all cursor-pointer shadow-lg shadow-blue-500/10 disabled:opacity-50"
-            >
-              <FolderOpen className="h-3.5 w-3.5" />
-              Change Folder
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                onChange={(e) => loadFromHF(e.target.value)}
+                disabled={isLoading}
+                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500 disabled:opacity-50 cursor-pointer"
+                defaultValue=""
+              >
+                <option value="" disabled className="bg-[#0b0f19] text-gray-500">Switch HF Iteration...</option>
+                <option value="iteration-2-regularized" className="bg-[#0b0f19] text-gray-100">Iteration 2 (Regularized / Final)</option>
+                <option value="iteration-2-unregularized" className="bg-[#0b0f19] text-gray-100">Iteration 2 (Unregularized)</option>
+                <option value="iteration-1" className="bg-[#0b0f19] text-gray-100">Iteration 1 (Initial SFT)</option>
+              </select>
+              <button
+                onClick={triggerPicker}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-gray-300 hover:text-white font-medium text-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                Local Folder
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -208,6 +222,7 @@ export function App() {
             <WelcomeBanner
               onFilesSelected={loadFromFiles}
               onLoadDemo={loadDemo}
+              onLoadFromHF={loadFromHF}
               isLoading={isLoading}
             />
           </div>
