@@ -4,7 +4,7 @@ This document shares the complete narrative of our experiment: why it was starte
 
 ## The Motivation: Replicating Frontier Token Efficiency
 
-The spark for this project came from an intriguing theory discussed online regarding the efficiency of frontier reasoning models (such as OpenAI's o1, o3, and the anticipated GPT-5.x variants).
+The spark for this project came from an intriguing theory discussed online regarding the efficiency of frontier reasoning models (such as OpenAI's GPT-5.x variants).
 
 ### The "Grug Hypothesis"
 While proprietary models hide their inner monologue behind a generated summary or block it entirely, many developers hypothesized that these models do not reason in full, grammatically correct sentences internally. Instead, to optimize token generation and minimize latency, they might think in a highly compressed, telegramic "Grug" or "caveman" style—dropping articles, conjugations, politeness markers, and syntactic filler. 
@@ -25,11 +25,11 @@ We selected **Qwen-3.5-0.8B-Instruct** (and later pivoted to **DeepSeek-R1-Disti
 To execute this, we built a modular pipeline from scratch. The pipeline comprises six distinct stages:
 
 - **Stage 1: Prompt Sampling**
-  We stratified 1,000 general-purpose prompts across six source datasets (StrategyQA, LogiQA, BoolQ, ANLI, PIQA, and ReClor). To prevent data leakage, we ran a Jaccard token similarity filter (threshold of 0.85) against our evaluation benchmarks (GSM8K and ARC-Challenge).
+  We stratified general-purpose prompts across six source datasets (StrategyQA, LogiQA, BoolQ, ANLI, PIQA, and ReClor) — sampling 1,000 prompts for Iteration 1 and scaling to 4,000 prompts for Iteration 2 to generate enough correct and validated traces.
 - **Stage 2: Verbose Trace Generation**
   We ran the base model locally on the M4 GPU to generate raw, verbose reasoning traces. Only prompts where the model answered correctly against the dataset's ground truth were kept, filtering out hallucinated reasoning chains.
 - **Stage 3: Trace Compression**
-  Correct traces were sent concurrently to an Nvidia NIM API (`gpt-4o-mini`) acting as the "compressor". Using a detailed system prompt loaded from `style_guide.md`, the compressor rewrote the verbose thinking blocks into a grammar-stripped, telegraphic caveman style.
+  Correct traces were sent concurrently to an Nvidia NIM API (`glm 5.2`) acting as the "compressor". Using a detailed system prompt loaded from `style_guide.md`, the compressor rewrote the verbose thinking blocks into a grammar-stripped, telegraphic caveman style.
 - **Stage 4: Automated Style Validation**
   We built `validate_traces.py` to enforce strict quality filters. It rejected compressed traces that exceeded 50% of the raw trace length, dropped critical numeric facts, omitted multiple-choice option letters, or included meta-commentary (like *"Wait, let me think..."*).
 - **Stage 5: Chat Template Formatting**

@@ -23,7 +23,7 @@ This report documents the results of fine-tuning the target reasoning model usin
 Training was executed on Apple Silicon (GPU via MLX). The validation loss converged smoothly:
 
 - **Starting Loss:** Validation loss of **`3.131`** at step 1.
-- **Best Validation Step:** Iteration **940** achieved the lowest validation loss of **`1.497`** (with training loss at **`1.997`**).
+- **Best Validation Step:** Iteration **940** achieved the lowest validation loss of **`1.497`** (with training loss at **`1.748`**).
 - **Model Selection:** The script successfully copied iteration 940 weights to `best_adapters.safetensors` and active `adapters.safetensors`.
 
 The complete training loss progression is shown below:
