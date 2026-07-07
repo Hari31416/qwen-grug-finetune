@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import os
+import sys
 import shutil
 import subprocess
 import argparse
 import logging
 from typing import Optional
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("sync_hf")
+# Add workspace root to Python path to import config
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from scripts.config import config
 
 # Constants
 GITHUB_REPO_URL = "https://github.com/Hari31416/qwen-grug-finetune"
@@ -48,9 +49,10 @@ def copy_file_or_dir(src: str, dst: str) -> None:
 
 def generate_readme(output_path: str) -> None:
     """Generate a comprehensive README.md for the Hugging Face repository."""
+    base_model_name = config.model_mlx_path.split("/")[-1].replace("-4bit", "")
     readme_content = f"""---
 license: mit
-base_model: mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit
+base_model: {config.model_mlx_path}
 tags:
 - mlx
 - lora
@@ -58,7 +60,7 @@ tags:
 - grug-style
 ---
 
-# Grug Reasoning Fine-Tune (DeepSeek-R1-Distill-Qwen-1.5B)
+# Grug Reasoning Fine-Tune ({base_model_name})
 
 This repository contains the fine-tuning training datasets, adapters (LoRA weights), and experimental results for **DeepSeek-R1-Distill-Qwen-1.5B** to learn a telegraphic, token-efficient reasoning style ("Grug/caveman" style) on Apple Silicon using MLX.
 
@@ -163,7 +165,7 @@ adapter_path = "./iteration-2-regularized/model"
 
 # Load the base model with LoRA adapters
 model, tokenizer = load(
-    "mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit",
+    "{config.model_mlx_path}",
     adapter_path=adapter_path
 )
 
@@ -193,7 +195,7 @@ print(response)
 
 ## 🔗 Links & Resources
 - **GitHub Repository:** [{GITHUB_REPO_URL}]({GITHUB_REPO_URL})
-- **Base Model:** [mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit](https://huggingface.co/mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit)
+- **Base Model:** [{config.model_mlx_path}](https://huggingface.co/{config.model_mlx_path})
 - **Hugging Face Model Hub:** [{HF_REPO_ID}](https://huggingface.co/{HF_REPO_ID})
 """
     with open(output_path, "w") as f:

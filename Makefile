@@ -2,7 +2,7 @@
 
 PYTHON = uv run python
 LIMIT = 100
-BATCH_SIZE = 16
+BATCH_SIZE = 4
 SAVE_EVERY = 20
 
 .PHONY: help train eval-base eval-ft eval-all plot clean
