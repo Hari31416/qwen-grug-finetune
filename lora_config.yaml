@@ -16,9 +16,9 @@ lora_parameters:
 batch_size: 2
 grad_accumulation_steps: 2
 grad_checkpoint: true
-iters: 1000
+iters: 800
 learning_rate: 5e-6
 steps_per_report: 10
-steps_per_eval: 50
-val_batches: 10
-save_every: 50
+steps_per_eval: 20
+val_batches: 25
+save_every: 20

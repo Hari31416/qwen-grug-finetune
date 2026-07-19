@@ -29,7 +29,7 @@ To execute this, we built a modular pipeline from scratch. The pipeline comprise
 - **Stage 2: Verbose Trace Generation**
   We ran the base model locally on the M4 GPU to generate raw, verbose reasoning traces. Only prompts where the model answered correctly against the dataset's ground truth were kept, filtering out hallucinated reasoning chains.
 - **Stage 3: Trace Compression**
-  Correct traces were sent concurrently to an Nvidia NIM API (`glm 5.2`) acting as the "compressor". Using a detailed system prompt loaded from `style_guide.md`, the compressor rewrote the verbose thinking blocks into a grammar-stripped, telegraphic caveman style.
+  Correct traces were sent concurrently to an API for a larger model acting as the "compressor". Using a detailed system prompt loaded from `style_guide.md`, the compressor rewrote the verbose thinking blocks into a grammar-stripped, telegraphic caveman style.
 - **Stage 4: Automated Style Validation**
   We built `validate_traces.py` to enforce strict quality filters. It rejected compressed traces that exceeded 50% of the raw trace length, dropped critical numeric facts, omitted multiple-choice option letters, or included meta-commentary (like *"Wait, let me think..."*).
 - **Stage 5: Chat Template Formatting**
