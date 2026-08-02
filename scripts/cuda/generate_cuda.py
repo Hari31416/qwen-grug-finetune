@@ -59,6 +59,11 @@ def main() -> None:
         default=config.max_generation_tokens,
         help="Max generation tokens",
     )
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Enable trust_remote_code for model loading if required",
+    )
 
     args = parser.parse_args()
 
@@ -73,7 +78,7 @@ def main() -> None:
     device = "cuda" if is_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
     logger.info("Target Device: %s", device)
 
-    model_kwargs = {"trust_remote_code": True}
+    model_kwargs = {"trust_remote_code": args.trust_remote_code}
     if is_cuda:
         from transformers import BitsAndBytesConfig
         bnb_config = BitsAndBytesConfig(
@@ -86,11 +91,21 @@ def main() -> None:
         model_kwargs["device_map"] = "auto"
         model_kwargs["torch_dtype"] = torch.float16
 
-    model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
+    except Exception as e:
+        logger.warning("Loading with trust_remote_code=%s failed (%s). Retrying with trust_remote_code=True...", args.trust_remote_code, e)
+        model_kwargs["trust_remote_code"] = True
+        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
+
     if not is_cuda:
         model.to(device)
 
-    tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=args.trust_remote_code)
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 

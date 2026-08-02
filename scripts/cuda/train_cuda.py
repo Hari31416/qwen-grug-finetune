@@ -93,6 +93,11 @@ def main() -> None:
         default=32,
         help="LoRA alpha (default: 32)",
     )
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Enable trust_remote_code for model loading if required",
+    )
 
     args = parser.parse_args()
 
@@ -146,16 +151,25 @@ def main() -> None:
 
     logger.info("Loading Base Model...")
     model_kwargs = {
-        "trust_remote_code": True,
+        "trust_remote_code": args.trust_remote_code,
     }
     if is_cuda:
         model_kwargs["quantization_config"] = bnb_config
         model_kwargs["device_map"] = "auto"
         model_kwargs["torch_dtype"] = torch.float16
 
-    model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
+    except Exception as e:
+        logger.warning("Loading with trust_remote_code=%s failed (%s). Retrying with trust_remote_code=True...", args.trust_remote_code, e)
+        model_kwargs["trust_remote_code"] = True
+        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
 
-    tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=args.trust_remote_code)
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
