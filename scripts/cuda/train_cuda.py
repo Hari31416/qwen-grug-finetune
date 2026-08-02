@@ -9,6 +9,11 @@ from typing import Optional
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from scripts.config import config
+from scripts.cuda.generate_cuda import (
+    load_causal_lm_model,
+    load_causal_lm_tokenizer,
+    patch_transformers_lazy_imports,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -93,21 +98,15 @@ def main() -> None:
         default=32,
         help="LoRA alpha (default: 32)",
     )
-    parser.add_argument(
-        "--trust-remote-code",
-        action="store_true",
-        help="Enable trust_remote_code for model loading if required",
-    )
 
     args = parser.parse_args()
 
+    # Apply patch to prevent BloomPreTrainedModel ModuleNotFoundError in Kaggle/Colab
+    patch_transformers_lazy_imports()
+
     import torch
     from datasets import load_dataset
-    from transformers import (
-        AutoModelForCausalLM,
-        AutoTokenizer,
-        TrainingArguments,
-    )
+    from transformers import TrainingArguments
     from peft import LoraConfig, prepare_model_for_kbit_training
     from trl import SFTTrainer
 
@@ -150,25 +149,14 @@ def main() -> None:
         )
 
     logger.info("Loading Base Model...")
-    model_kwargs = {
-        "trust_remote_code": args.trust_remote_code,
-    }
+    model_kwargs = {}
     if is_cuda:
         model_kwargs["quantization_config"] = bnb_config
         model_kwargs["device_map"] = "auto"
         model_kwargs["torch_dtype"] = torch.float16
 
-    try:
-        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
-    except Exception as e:
-        logger.warning("Loading with trust_remote_code=%s failed (%s). Retrying with trust_remote_code=True...", args.trust_remote_code, e)
-        model_kwargs["trust_remote_code"] = True
-        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
-
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=args.trust_remote_code)
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
+    model = load_causal_lm_model(hf_model_id, **model_kwargs)
+    tokenizer = load_causal_lm_tokenizer(hf_model_id)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

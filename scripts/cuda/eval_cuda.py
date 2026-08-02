@@ -13,7 +13,11 @@ from scripts.prompt_utils import build_user_prompt, STYLE_SYSTEM_PROMPT
 from scripts.generation_utils import parse_thinking_and_answer
 from scripts.eval import extract_numeric_answer
 from scripts.cuda.train_cuda import resolve_hf_model_id
-from scripts.cuda.generate_cuda import load_causal_lm_model, load_causal_lm_tokenizer
+from scripts.cuda.generate_cuda import (
+    load_causal_lm_model,
+    load_causal_lm_tokenizer,
+    patch_transformers_lazy_imports,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -94,9 +98,11 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Apply patch to prevent BloomPreTrainedModel ModuleNotFoundError in Kaggle/Colab
+    patch_transformers_lazy_imports()
+
     import torch
     from datasets import load_dataset
-    from peft import PeftModel
 
     hf_model_id = resolve_hf_model_id(args.model)
     logger.info("Base Hugging Face Model ID: %s", hf_model_id)
@@ -134,6 +140,7 @@ def main() -> None:
             logger.error("--adapter flag requires --adapter-path specified")
             sys.exit(1)
         logger.info("Loading PEFT LoRA Adapter from: %s", adapter_path)
+        from peft import PeftModel
         model = PeftModel.from_pretrained(model, adapter_path)
 
     model.eval()

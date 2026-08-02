@@ -20,12 +20,12 @@ Unlike Apple Silicon scripts which use `mlx_lm`, these scripts utilize `torch`, 
 
 ### 2. Clone Repository and Install Dependencies
 
-Execute in the first notebook cell:
+Execute in the first notebook cell (do NOT upgrade pre-installed `torch` or `transformers` to avoid CUDA driver conflicts):
 
 ```bash
 !git clone https://github.com/Hari31416/qwen-grug-finetune.git
 %cd qwen-grug-finetune
-!pip install -q -U torch transformers peft trl bitsandbytes datasets accelerate huggingface_hub
+!pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub
 ```
 
 ### 3. Download SFT Dataset

@@ -15,6 +15,22 @@ logging.basicConfig(
 logger = logging.getLogger("generate_cuda")
 
 
+def patch_transformers_lazy_imports() -> None:
+    """Patches broken lazy imports in transformers (e.g. BloomPreTrainedModel) in Kaggle/Colab environments."""
+    try:
+        import transformers
+        for mod_name in ["BloomPreTrainedModel", "BloomForCausalLM", "BloomModel"]:
+            try:
+                getattr(transformers, mod_name)
+            except Exception:
+                class DummyBloomClass:
+                    pass
+                setattr(transformers, mod_name, DummyBloomClass)
+                logger.debug("Patched transformers.%s with DummyClass", mod_name)
+    except Exception as e:
+        logger.warning("Could not patch transformers lazy imports: %s", e)
+
+
 def load_causal_lm_model(hf_model_id: str, **kwargs):
     """Robustly loads a CausalLM model with fallback to Qwen2ForCausalLM if AutoModel mapping fails."""
     try:
@@ -25,7 +41,6 @@ def load_causal_lm_model(hf_model_id: str, **kwargs):
             "AutoModelForCausalLM failed (%s). Falling back directly to Qwen2ForCausalLM...", e
         )
         from transformers import Qwen2ForCausalLM
-        # Remove trust_remote_code if present in kwargs for direct Qwen2 class
         kwargs_clean = {k: v for k, v in kwargs.items() if k != "trust_remote_code"}
         return Qwen2ForCausalLM.from_pretrained(hf_model_id, **kwargs_clean)
 
@@ -91,8 +106,10 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Apply patch to prevent BloomPreTrainedModel ModuleNotFoundError in Kaggle/Colab
+    patch_transformers_lazy_imports()
+
     import torch
-    from peft import PeftModel
 
     hf_model_id = resolve_hf_model_id(args.model)
     logger.info("Loading Base Model: %s", hf_model_id)
@@ -124,6 +141,7 @@ def main() -> None:
 
     if args.adapter_path:
         logger.info("Loading LoRA adapter from: %s", args.adapter_path)
+        from peft import PeftModel
         model = PeftModel.from_pretrained(model, args.adapter_path)
 
     model.eval()
