@@ -15,6 +15,35 @@ logging.basicConfig(
 logger = logging.getLogger("generate_cuda")
 
 
+def load_causal_lm_model(hf_model_id: str, **kwargs):
+    """Robustly loads a CausalLM model with fallback to Qwen2ForCausalLM if AutoModel mapping fails."""
+    try:
+        from transformers import AutoModelForCausalLM
+        return AutoModelForCausalLM.from_pretrained(hf_model_id, **kwargs)
+    except Exception as e:
+        logger.warning(
+            "AutoModelForCausalLM failed (%s). Falling back directly to Qwen2ForCausalLM...", e
+        )
+        from transformers import Qwen2ForCausalLM
+        # Remove trust_remote_code if present in kwargs for direct Qwen2 class
+        kwargs_clean = {k: v for k, v in kwargs.items() if k != "trust_remote_code"}
+        return Qwen2ForCausalLM.from_pretrained(hf_model_id, **kwargs_clean)
+
+
+def load_causal_lm_tokenizer(hf_model_id: str, **kwargs):
+    """Robustly loads tokenizer with fallback to Qwen2TokenizerFast if AutoTokenizer fails."""
+    try:
+        from transformers import AutoTokenizer
+        return AutoTokenizer.from_pretrained(hf_model_id, **kwargs)
+    except Exception as e:
+        logger.warning(
+            "AutoTokenizer failed (%s). Falling back directly to Qwen2TokenizerFast...", e
+        )
+        from transformers import Qwen2TokenizerFast
+        kwargs_clean = {k: v for k, v in kwargs.items() if k != "trust_remote_code"}
+        return Qwen2TokenizerFast.from_pretrained(hf_model_id, **kwargs_clean)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run model generation on CUDA / MPS / CPU")
     parser.add_argument(
@@ -59,16 +88,10 @@ def main() -> None:
         default=config.max_generation_tokens,
         help="Max generation tokens",
     )
-    parser.add_argument(
-        "--trust-remote-code",
-        action="store_true",
-        help="Enable trust_remote_code for model loading if required",
-    )
 
     args = parser.parse_args()
 
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
 
     hf_model_id = resolve_hf_model_id(args.model)
@@ -78,7 +101,7 @@ def main() -> None:
     device = "cuda" if is_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
     logger.info("Target Device: %s", device)
 
-    model_kwargs = {"trust_remote_code": args.trust_remote_code}
+    model_kwargs = {}
     if is_cuda:
         from transformers import BitsAndBytesConfig
         bnb_config = BitsAndBytesConfig(
@@ -91,21 +114,11 @@ def main() -> None:
         model_kwargs["device_map"] = "auto"
         model_kwargs["torch_dtype"] = torch.float16
 
-    try:
-        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
-    except Exception as e:
-        logger.warning("Loading with trust_remote_code=%s failed (%s). Retrying with trust_remote_code=True...", args.trust_remote_code, e)
-        model_kwargs["trust_remote_code"] = True
-        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
-
+    model = load_causal_lm_model(hf_model_id, **model_kwargs)
     if not is_cuda:
         model.to(device)
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=args.trust_remote_code)
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
-
+    tokenizer = load_causal_lm_tokenizer(hf_model_id)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 

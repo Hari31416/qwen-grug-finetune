@@ -13,6 +13,7 @@ from scripts.prompt_utils import build_user_prompt, STYLE_SYSTEM_PROMPT
 from scripts.generation_utils import parse_thinking_and_answer
 from scripts.eval import extract_numeric_answer
 from scripts.cuda.train_cuda import resolve_hf_model_id
+from scripts.cuda.generate_cuda import load_causal_lm_model, load_causal_lm_tokenizer
 
 # Configure logging
 logging.basicConfig(
@@ -90,17 +91,11 @@ def main() -> None:
         action="store_true",
         help="Disable style system prompt",
     )
-    parser.add_argument(
-        "--trust-remote-code",
-        action="store_true",
-        help="Enable trust_remote_code for model loading if required",
-    )
 
     args = parser.parse_args()
 
     import torch
     from datasets import load_dataset
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
 
     hf_model_id = resolve_hf_model_id(args.model)
@@ -110,7 +105,7 @@ def main() -> None:
     device = "cuda" if is_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
     logger.info("Target Device: %s", device)
 
-    model_kwargs = {"trust_remote_code": args.trust_remote_code}
+    model_kwargs = {}
     if is_cuda:
         from transformers import BitsAndBytesConfig
         bnb_config = BitsAndBytesConfig(
@@ -124,21 +119,11 @@ def main() -> None:
         model_kwargs["torch_dtype"] = torch.float16
 
     logger.info("Loading Base Model...")
-    try:
-        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
-    except Exception as e:
-        logger.warning("Loading with trust_remote_code=%s failed (%s). Retrying with trust_remote_code=True...", args.trust_remote_code, e)
-        model_kwargs["trust_remote_code"] = True
-        model = AutoModelForCausalLM.from_pretrained(hf_model_id, **model_kwargs)
-
+    model = load_causal_lm_model(hf_model_id, **model_kwargs)
     if not is_cuda:
         model.to(device)
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=args.trust_remote_code)
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
-
+    tokenizer = load_causal_lm_tokenizer(hf_model_id)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
