@@ -9,10 +9,11 @@ from typing import Optional
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from scripts.config import config
-from scripts.cuda.generate_cuda import (
+from scripts.cuda.cuda_utils import (
+    resolve_hf_model_id,
+    patch_transformers_lazy_imports,
     load_causal_lm_model,
     load_causal_lm_tokenizer,
-    patch_transformers_lazy_imports,
 )
 
 # Configure logging
@@ -20,18 +21,6 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("train_cuda")
-
-
-def resolve_hf_model_id(model_arg: str) -> str:
-    """Resolves an MLX model path into standard Hugging Face repo ID if necessary."""
-    if "mlx-community" in model_arg:
-        if "DeepSeek-R1-Distill-Qwen-7B" in model_arg:
-            return "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-        if "DeepSeek-R1-Distill-Qwen-1.5B" in model_arg:
-            return "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-        if "DeepSeek-R1-Distill-Qwen-14B" in model_arg:
-            return "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-    return model_arg
 
 
 def main() -> None:

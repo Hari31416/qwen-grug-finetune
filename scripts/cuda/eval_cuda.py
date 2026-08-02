@@ -12,11 +12,11 @@ from scripts.config import config
 from scripts.prompt_utils import build_user_prompt, STYLE_SYSTEM_PROMPT
 from scripts.generation_utils import parse_thinking_and_answer
 from scripts.eval import extract_numeric_answer
-from scripts.cuda.train_cuda import resolve_hf_model_id
-from scripts.cuda.generate_cuda import (
+from scripts.cuda.cuda_utils import (
+    resolve_hf_model_id,
+    patch_transformers_lazy_imports,
     load_causal_lm_model,
     load_causal_lm_tokenizer,
-    patch_transformers_lazy_imports,
 )
 
 # Configure logging

@@ -6,57 +6,18 @@ import logging
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from scripts.config import config
-from scripts.cuda.train_cuda import resolve_hf_model_id
+from scripts.cuda.cuda_utils import (
+    resolve_hf_model_id,
+    patch_transformers_lazy_imports,
+    load_causal_lm_model,
+    load_causal_lm_tokenizer,
+)
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("generate_cuda")
-
-
-def patch_transformers_lazy_imports() -> None:
-    """Patches broken lazy imports in transformers (e.g. BloomPreTrainedModel) in Kaggle/Colab environments."""
-    try:
-        import transformers
-        for mod_name in ["BloomPreTrainedModel", "BloomForCausalLM", "BloomModel"]:
-            try:
-                getattr(transformers, mod_name)
-            except Exception:
-                class DummyBloomClass:
-                    pass
-                setattr(transformers, mod_name, DummyBloomClass)
-                logger.debug("Patched transformers.%s with DummyClass", mod_name)
-    except Exception as e:
-        logger.warning("Could not patch transformers lazy imports: %s", e)
-
-
-def load_causal_lm_model(hf_model_id: str, **kwargs):
-    """Robustly loads a CausalLM model with fallback to Qwen2ForCausalLM if AutoModel mapping fails."""
-    try:
-        from transformers import AutoModelForCausalLM
-        return AutoModelForCausalLM.from_pretrained(hf_model_id, **kwargs)
-    except Exception as e:
-        logger.warning(
-            "AutoModelForCausalLM failed (%s). Falling back directly to Qwen2ForCausalLM...", e
-        )
-        from transformers import Qwen2ForCausalLM
-        kwargs_clean = {k: v for k, v in kwargs.items() if k != "trust_remote_code"}
-        return Qwen2ForCausalLM.from_pretrained(hf_model_id, **kwargs_clean)
-
-
-def load_causal_lm_tokenizer(hf_model_id: str, **kwargs):
-    """Robustly loads tokenizer with fallback to Qwen2TokenizerFast if AutoTokenizer fails."""
-    try:
-        from transformers import AutoTokenizer
-        return AutoTokenizer.from_pretrained(hf_model_id, **kwargs)
-    except Exception as e:
-        logger.warning(
-            "AutoTokenizer failed (%s). Falling back directly to Qwen2TokenizerFast...", e
-        )
-        from transformers import Qwen2TokenizerFast
-        kwargs_clean = {k: v for k, v in kwargs.items() if k != "trust_remote_code"}
-        return Qwen2TokenizerFast.from_pretrained(hf_model_id, **kwargs_clean)
 
 
 def main() -> None:
