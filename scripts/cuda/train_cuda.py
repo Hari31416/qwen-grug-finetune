@@ -264,7 +264,24 @@ def main() -> None:
             )
 
     logger.info("Starting SFT Training...")
-    trainer.train()
+    train_result = trainer.train()
+
+    # Save log history to metrics.json
+    metrics_path = os.path.join(output_adapter_dir, "metrics.json")
+    try:
+        log_history = getattr(trainer.state, "log_history", [])
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({"log_history": log_history}, f, indent=2)
+        logger.info("Saved training metrics to: %s", metrics_path)
+    except Exception as me:
+        logger.warning("Could not save metrics.json: %s", me)
+
+    # Plot loss curve
+    try:
+        from scripts.cuda.plot_loss import plot_latest_training_loss
+        plot_latest_training_loss()
+    except Exception as pe:
+        logger.warning("Could not generate loss plot: %s", pe)
 
     final_dir = os.path.join(output_adapter_dir, "final_adapters")
     logger.info("Saving fine-tuned LoRA adapters to %s...", final_dir)

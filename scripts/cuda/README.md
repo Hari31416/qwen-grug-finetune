@@ -49,7 +49,15 @@ Run QLoRA SFT fine-tuning (automatically uses 2x T4 GPUs via `device_map="auto"`
   --grad-accum 4
 ```
 
-### 5. Evaluate Base and Fine-Tuned Models
+### 5. Plot Training & Validation Loss
+
+Visualize loss curves and learning rate schedule inside the notebook:
+
+```python
+!python scripts/cuda/plot_loss.py
+```
+
+### 6. Evaluate Base and Fine-Tuned Models
 
 Evaluate accuracy, latency, and format compliance on GSM8K:
 
