@@ -176,24 +176,31 @@ def main() -> None:
     try:
         from trl import SFTConfig, SFTTrainer
 
-        sft_config = SFTConfig(
-            output_dir=output_adapter_dir,
-            per_device_train_batch_size=args.batch_size,
-            gradient_accumulation_steps=args.grad_accum,
-            learning_rate=args.learning_rate,
-            lr_scheduler_type="cosine",
-            warmup_ratio=0.03,
-            fp16=is_cuda,
-            logging_steps=10,
-            eval_strategy="steps",
-            eval_steps=50,
-            save_steps=50,
-            num_train_epochs=args.epochs,
-            save_total_limit=2,
-            report_to="none",
-            dataset_text_field="text",
-            max_length=args.max_seq_length,
-        )
+        sft_config_kwargs = {
+            "output_dir": output_adapter_dir,
+            "per_device_train_batch_size": args.batch_size,
+            "gradient_accumulation_steps": args.grad_accum,
+            "learning_rate": args.learning_rate,
+            "lr_scheduler_type": "cosine",
+            "warmup_ratio": 0.03,
+            "fp16": is_cuda,
+            "logging_steps": 10,
+            "eval_strategy": "steps",
+            "eval_steps": 50,
+            "save_steps": 50,
+            "num_train_epochs": args.epochs,
+            "save_total_limit": 2,
+            "report_to": "none",
+            "dataset_text_field": "text",
+            "max_length": args.max_seq_length,
+        }
+        # Disable TRL experimental chunked cross-entropy loss to prevent AttributeError on 4-bit PEFT models
+        try:
+            sft_config_kwargs["loss_type"] = "for_causal_lm"
+            sft_config = SFTConfig(**sft_config_kwargs)
+        except TypeError:
+            sft_config_kwargs.pop("loss_type", None)
+            sft_config = SFTConfig(**sft_config_kwargs)
         try:
             trainer = SFTTrainer(
                 model=model,
@@ -242,16 +249,26 @@ def main() -> None:
                 args=training_args,
             )
         except TypeError:
-            trainer = SFTTrainer(
-                model=model,
-                train_dataset=dataset["train"],
-                eval_dataset=dataset["validation"],
-                peft_config=peft_config,
-                dataset_text_field="text",
-                max_seq_length=args.max_seq_length,
-                tokenizer=tokenizer,
-                args=training_args,
-            )
+            try:
+                trainer = SFTTrainer(
+                    model=model,
+                    train_dataset=dataset["train"],
+                    eval_dataset=dataset["validation"],
+                    peft_config=peft_config,
+                    dataset_text_field="text",
+                    max_seq_length=args.max_seq_length,
+                    tokenizer=tokenizer,
+                    args=training_args,
+                )
+            except TypeError:
+                trainer = SFTTrainer(
+                    model=model,
+                    train_dataset=dataset["train"],
+                    eval_dataset=dataset["validation"],
+                    peft_config=peft_config,
+                    processing_class=tokenizer,
+                    args=training_args,
+                )
 
     logger.info("Starting SFT Training...")
     trainer.train()
