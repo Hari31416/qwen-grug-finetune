@@ -24,11 +24,11 @@ def create_notebook():
     # Title
     add_md("""# Grug Reasoning Fine-Tuning: Kaggle / CUDA Interactive Notebook
 
-This notebook imports modular python functions directly from `scripts.cuda` to perform end-to-end SFT fine-tuning, inference, evaluation, and loss visualization on **DeepSeek-R1-Distill-Qwen-7B**.
+This notebook performs end-to-end 4-bit QLoRA fine-tuning, inference, evaluation, and loss visualization on **DeepSeek-R1-Distill-Qwen-7B**.
 
 ### Notebook Workflow:
 1. **Hyperparameters & Config**: Centralized experimental parameters (epochs, batch sizes, learning rates, limits).
-2. **Setup & Imports**: Load modular helpers (`cuda_utils`, `download_hf_data`) and fetch SFT dataset.
+2. **Repository Clone & Setup**: Automatically clones repository scripts and installs dependencies.
 3. **Base Model Inference**: Load 4-bit quantized base model and run sample generation.
 4. **QLoRA Fine-Tuning**: Execute `run_sft_training()` using configured hyperparameters.
 5. **Loss Visualization**: Plot Loss Curves and Learning Rate schedule using `plot_latest_training_loss()`.
@@ -42,7 +42,9 @@ This notebook imports modular python functions directly from `scripts.cuda` to p
 # ⚙️ EXPERIMENTAL HYPERPARAMETERS & CONFIG
 # ==========================================
 
-# Model & Environment Paths
+# Repository & Dataset Paths
+REPO_URL = "https://github.com/Hari31416/qwen-grug-finetune.git"
+REPO_NAME = "qwen-grug-finetune"
 MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
 DATA_DIR = "data"
 ADAPTER_OUTPUT_DIR = "adapters"
@@ -61,16 +63,25 @@ EVAL_LIMIT = 50           # Limit number of GSM8K test samples for fast evaluati
 EVAL_BATCH_SIZE = 2       # Per-device evaluation batch size (keep low to prevent VRAM OOM)
 EVAL_MAX_TOKENS = 1024     # Max generation tokens per GSM8K problem""")
 
-    # Section 2: Setup & Environment Imports
-    add_md("## 2. Setup & Environment Imports")
+    # Section 2: Repository Clone & Setup
+    add_md("## 2. Repository Clone & Environment Setup")
 
-    add_code("""# Install required packages (omitting -U torch to prevent CUDA driver conflicts)
+    add_code("""# Install required Python packages (omitting -U torch to prevent CUDA driver conflicts)
 %pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas""")
 
     add_code("""import sys
 import os
 
-# Add repository root to python path to import project modules
+# Automatically clone repo scripts if running in fresh Kaggle / Colab session
+if not os.path.exists("scripts") and not os.path.exists(f"{REPO_NAME}/scripts"):
+    print(f"Cloning {REPO_URL} into workspace...")
+    !git clone {REPO_URL}
+    if os.path.exists(REPO_NAME):
+        %cd {REPO_NAME}
+elif os.path.exists(REPO_NAME) and os.path.exists(f"{REPO_NAME}/scripts"):
+    %cd {REPO_NAME}
+
+# Add repository root to python path
 sys.path.append(".")
 
 from scripts.cuda.cuda_utils import patch_transformers_lazy_imports
@@ -252,7 +263,7 @@ if base_eval_results and ft_eval_results:
     out_path = "notebooks/kaggle_grug_finetune.ipynb"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=2)
-    print(f"Successfully generated notebook with centralized config at: {out_path}")
+    print(f"Successfully generated self-cloning notebook at: {out_path}")
 
 if __name__ == "__main__":
     create_notebook()
