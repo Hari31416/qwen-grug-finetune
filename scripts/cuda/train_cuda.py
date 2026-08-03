@@ -194,14 +194,24 @@ def main() -> None:
             dataset_text_field="text",
             max_length=args.max_seq_length,
         )
-        trainer = SFTTrainer(
-            model=model,
-            train_dataset=dataset["train"],
-            eval_dataset=dataset["validation"],
-            peft_config=peft_config,
-            tokenizer=tokenizer,
-            args=sft_config,
-        )
+        try:
+            trainer = SFTTrainer(
+                model=model,
+                train_dataset=dataset["train"],
+                eval_dataset=dataset["validation"],
+                peft_config=peft_config,
+                processing_class=tokenizer,
+                args=sft_config,
+            )
+        except TypeError:
+            trainer = SFTTrainer(
+                model=model,
+                train_dataset=dataset["train"],
+                eval_dataset=dataset["validation"],
+                peft_config=peft_config,
+                tokenizer=tokenizer,
+                args=sft_config,
+            )
     except Exception as exc:
         logger.warning("Initializing with SFTConfig failed (%s). Falling back to TrainingArguments...", exc)
         training_args = TrainingArguments(
@@ -220,16 +230,28 @@ def main() -> None:
             save_total_limit=2,
             report_to="none",
         )
-        trainer = SFTTrainer(
-            model=model,
-            train_dataset=dataset["train"],
-            eval_dataset=dataset["validation"],
-            peft_config=peft_config,
-            dataset_text_field="text",
-            max_seq_length=args.max_seq_length,
-            tokenizer=tokenizer,
-            args=training_args,
-        )
+        try:
+            trainer = SFTTrainer(
+                model=model,
+                train_dataset=dataset["train"],
+                eval_dataset=dataset["validation"],
+                peft_config=peft_config,
+                dataset_text_field="text",
+                max_seq_length=args.max_seq_length,
+                processing_class=tokenizer,
+                args=training_args,
+            )
+        except TypeError:
+            trainer = SFTTrainer(
+                model=model,
+                train_dataset=dataset["train"],
+                eval_dataset=dataset["validation"],
+                peft_config=peft_config,
+                dataset_text_field="text",
+                max_seq_length=args.max_seq_length,
+                tokenizer=tokenizer,
+                args=training_args,
+            )
 
     logger.info("Starting SFT Training...")
     trainer.train()
