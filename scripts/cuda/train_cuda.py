@@ -185,6 +185,8 @@ def main() -> None:
         sft_config_kwargs = {
             "output_dir": output_adapter_dir,
             "per_device_train_batch_size": args.batch_size,
+            "per_device_eval_batch_size": args.batch_size,
+            "eval_accumulation_steps": 2,
             "gradient_accumulation_steps": args.grad_accum,
             "learning_rate": args.learning_rate,
             "lr_scheduler_type": "cosine",
@@ -233,6 +235,8 @@ def main() -> None:
         training_args = TrainingArguments(
             output_dir=output_adapter_dir,
             per_device_train_batch_size=args.batch_size,
+            per_device_eval_batch_size=args.batch_size,
+            eval_accumulation_steps=2,
             gradient_accumulation_steps=args.grad_accum,
             learning_rate=args.learning_rate,
             lr_scheduler_type="cosine",
