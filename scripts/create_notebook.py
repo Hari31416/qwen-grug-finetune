@@ -133,8 +133,15 @@ print("=== BASE MODEL RESPONSE ===\\n", response)""")
 
     add_code("""import torch
 import gc
+import multiprocessing as mp
 from accelerate import notebook_launcher
 from scripts.cuda.train_cuda import run_sft_training
+
+# Use 'spawn' start method for CUDA multiprocessing
+try:
+    mp.set_start_method("spawn", force=True)
+except Exception:
+    pass
 
 # Free Cell 3 base model from VRAM before spawning DDP workers
 if 'model' in globals():
@@ -300,7 +307,7 @@ if base_eval_results and ft_eval_results:
     out_path = "notebooks/kaggle_grug_finetune.ipynb"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=2)
-    print(f"Successfully generated notebook with notebook_launcher DDP at: {out_path}")
+    print(f"Successfully generated notebook with spawn multiprocessing fix at: {out_path}")
 
 if __name__ == "__main__":
     create_notebook()

@@ -53,8 +53,11 @@ def run_sft_training(
     num_gpus = torch.cuda.device_count() if is_cuda else 0
     if is_cuda:
         logger.info("CUDA Devices Available: %d", num_gpus)
-        for g in range(num_gpus):
-            logger.info("  GPU %d: %s", g, torch.cuda.get_device_name(g))
+        try:
+            for g in range(num_gpus):
+                logger.info("  GPU %d: %s", g, torch.cuda.get_device_name(g))
+        except Exception as e:
+            logger.debug("Could not query GPU device name in subprocess: %s", e)
     else:
         logger.warning(
             "CUDA is not available on this system. Running in fallback mode (MPS/CPU) for testing."
