@@ -188,7 +188,6 @@ def main() -> None:
         num_train_epochs=args.epochs,
         save_total_limit=2,
         report_to="none",
-        use_mps_device=bool(torch.backends.mps.is_available() and not is_cuda),
     )
 
     trainer = SFTTrainer(
