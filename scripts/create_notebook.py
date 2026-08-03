@@ -51,8 +51,8 @@ ADAPTER_OUTPUT_DIR = "adapters"
 
 # Training Hyperparameters
 EPOCHS = 1                # Number of training epochs (e.g. 1 or 3)
-TRAIN_BATCH_SIZE = 2      # Per-device training batch size
-GRAD_ACCUM = 4            # Gradient accumulation steps (Effective batch size = 2 * 4 * num_gpus)
+TRAIN_BATCH_SIZE = 1      # Per-device batch size (1 provides max VRAM headroom & prevents OOM)
+GRAD_ACCUM = 8            # Gradient accumulation steps (Effective batch size = 1 * 8 = 8)
 LEARNING_RATE = 2e-4      # Peak learning rate
 MAX_SEQ_LENGTH = 1536     # Maximum token sequence length for training
 LORA_R = 16               # LoRA rank dimension
@@ -60,7 +60,7 @@ LORA_ALPHA = 32           # LoRA alpha scaling factor
 
 # Benchmark Evaluation Hyperparameters
 EVAL_LIMIT = 50           # Limit number of GSM8K test samples for fast evaluation (e.g., 50 or 100)
-EVAL_BATCH_SIZE = 2       # Per-device evaluation batch size (keep low to prevent VRAM OOM)
+EVAL_BATCH_SIZE = 1       # Per-device evaluation batch size (keep low to prevent VRAM OOM)
 EVAL_MAX_TOKENS = 1024     # Max generation tokens per GSM8K problem""")
 
     # Section 2: Repository Clone & Setup
@@ -159,7 +159,7 @@ trainer = run_sft_training(
     add_md("""> **Tip for 100% Dual-GPU Data Parallelism (Optional)**:
 > To run full DDP multi-GPU training with 100% compute on both GPUs concurrently, execute via `accelerate launch`:
 > ```bash
-> !accelerate launch --multi_gpu --num_processes=2 scripts/cuda/train_cuda.py --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B --data data --epochs 1 --batch-size 2 --grad-accum 4
+> !accelerate launch --multi_gpu --num_processes=2 scripts/cuda/train_cuda.py --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B --data data --epochs 1 --batch-size 1 --grad-accum 8
 > ```""")
 
     # Section 5: Plot Loss
@@ -298,7 +298,7 @@ if base_eval_results and ft_eval_results:
     out_path = "notebooks/kaggle_grug_finetune.ipynb"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=2)
-    print(f"Successfully generated clean notebook at: {out_path}")
+    print(f"Successfully generated notebook with TRAIN_BATCH_SIZE=1 & ClearCacheCallback at: {out_path}")
 
 if __name__ == "__main__":
     create_notebook()

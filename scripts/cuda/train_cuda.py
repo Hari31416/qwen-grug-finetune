@@ -1,5 +1,9 @@
 import os
 import sys
+
+# Set PyTorch allocator settings BEFORE importing torch to prevent memory fragmentation
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import argparse
 import logging
 import datetime
@@ -15,12 +19,34 @@ from scripts.cuda.cuda_utils import (
     load_causal_lm_model,
     load_causal_lm_tokenizer,
 )
+from transformers import TrainerCallback
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("train_cuda")
+
+
+class ClearCacheCallback(TrainerCallback):
+    """Frees cached VRAM after evaluation and periodically during training steps to prevent memory leaks."""
+
+    def on_evaluate(self, args: Any, state: Any, control: Any, **kwargs: Any) -> None:
+        import gc
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> None:
+        if state.global_step % 20 == 0:
+            import gc
+            import torch
+
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 def run_sft_training(
@@ -177,6 +203,7 @@ def run_sft_training(
                 peft_config=peft_config,
                 processing_class=tokenizer,
                 args=sft_config,
+                callbacks=[ClearCacheCallback()],
             )
         except TypeError:
             trainer = SFTTrainer(
@@ -186,6 +213,7 @@ def run_sft_training(
                 peft_config=peft_config,
                 tokenizer=tokenizer,
                 args=sft_config,
+                callbacks=[ClearCacheCallback()],
             )
     except Exception as exc:
         logger.warning("Initializing with SFTConfig failed (%s). Falling back to TrainingArguments...", exc)
@@ -217,6 +245,7 @@ def run_sft_training(
                 peft_config=peft_config,
                 processing_class=tokenizer,
                 args=training_args,
+                callbacks=[ClearCacheCallback()],
             )
         except TypeError:
             trainer = SFTTrainer(
@@ -226,6 +255,7 @@ def run_sft_training(
                 peft_config=peft_config,
                 tokenizer=tokenizer,
                 args=training_args,
+                callbacks=[ClearCacheCallback()],
             )
 
     logger.info("Starting SFT Training...")
