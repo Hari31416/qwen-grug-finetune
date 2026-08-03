@@ -34,6 +34,8 @@ def run_sft_training(
     max_seq_length: int = 1536,
     lora_r: int = 16,
     lora_alpha: int = 32,
+    model: Optional[Any] = None,
+    tokenizer: Optional[Any] = None,
 ) -> Any:
     """Executes SFT QLoRA fine-tuning training and returns the trainer instance."""
     patch_transformers_lazy_imports()
@@ -71,26 +73,24 @@ def run_sft_training(
     os.makedirs(output_adapter_dir, exist_ok=True)
     logger.info("Output Adapter Directory: %s", output_adapter_dir)
 
-    # Configure 4-bit Quantization (QLoRA) if CUDA is available
-    bnb_config = None
-    if is_cuda:
-        from transformers import BitsAndBytesConfig
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
+    if model is None or tokenizer is None:
+        logger.info("Loading Base Model...")
+        bnb_config = None
+        model_kwargs = {}
+        if is_cuda:
+            from transformers import BitsAndBytesConfig
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+            )
+            model_kwargs["quantization_config"] = bnb_config
+            model_kwargs["device_map"] = "auto"
+            model_kwargs["torch_dtype"] = torch.float16
 
-    logger.info("Loading Base Model...")
-    model_kwargs = {}
-    if is_cuda:
-        model_kwargs["quantization_config"] = bnb_config
-        model_kwargs["device_map"] = "auto"
-        model_kwargs["torch_dtype"] = torch.float16
-
-    model = load_causal_lm_model(hf_model_id, **model_kwargs)
-    tokenizer = load_causal_lm_tokenizer(hf_model_id)
+        model = load_causal_lm_model(hf_model_id, **model_kwargs)
+        tokenizer = load_causal_lm_tokenizer(hf_model_id)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

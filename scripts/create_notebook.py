@@ -30,7 +30,7 @@ This notebook performs end-to-end 4-bit QLoRA fine-tuning, inference, evaluation
 1. **Hyperparameters & Config**: Centralized experimental parameters (epochs, batch sizes, learning rates, limits).
 2. **Repository Clone & Setup**: Automatically clones repository scripts and installs dependencies.
 3. **Base Model Inference**: Load 4-bit quantized base model and run sample generation.
-4. **QLoRA Fine-Tuning**: Execute `run_sft_training()` using configured hyperparameters.
+4. **QLoRA Fine-Tuning**: Execute `run_sft_training()` using the pre-loaded base model (saves VRAM).
 5. **Loss Visualization**: Plot Loss Curves and Learning Rate schedule using `plot_latest_training_loss()`.
 6. **GSM8K Benchmarking**: Benchmark Base Model vs. Fine-Tuned Model using `run_gsm8k_eval()`.
 7. **EDA Dashboard**: Plot comparative metrics for Accuracy, Format Compliance, Reasoning Tokens, and Latency.""")
@@ -133,7 +133,7 @@ print("=== BASE MODEL RESPONSE ===\\n", response)""")
 
     add_code("""from scripts.cuda.train_cuda import run_sft_training
 
-print("Starting SFT Training with configured hyperparameters...")
+print("Starting SFT Training with pre-loaded model (reusing VRAM)...")
 trainer = run_sft_training(
     model_arg=MODEL_ID,
     data_dir=DATA_DIR,
@@ -145,6 +145,8 @@ trainer = run_sft_training(
     max_seq_length=MAX_SEQ_LENGTH,
     lora_r=LORA_R,
     lora_alpha=LORA_ALPHA,
+    model=model,
+    tokenizer=tokenizer,
 )""")
 
     # Section 5: Plot Loss
@@ -263,7 +265,7 @@ if base_eval_results and ft_eval_results:
     out_path = "notebooks/kaggle_grug_finetune.ipynb"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=2)
-    print(f"Successfully generated self-cloning notebook at: {out_path}")
+    print(f"Successfully generated notebook with VRAM optimization at: {out_path}")
 
 if __name__ == "__main__":
     create_notebook()
