@@ -177,6 +177,8 @@ def main() -> None:
         },
     )
 
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
     try:
         from trl import SFTConfig, SFTTrainer
 
@@ -189,6 +191,7 @@ def main() -> None:
             "warmup_ratio": 0.03,
             "fp16": False,  # BitsAndBytes handles FP16 compute natively; disable AMP GradScaler to prevent unscale_ error
             "bf16": False,
+            "gradient_checkpointing": True,
             "logging_steps": 10,
             "eval_strategy": "steps",
             "eval_steps": 50,
@@ -236,6 +239,7 @@ def main() -> None:
             warmup_ratio=0.03,
             fp16=False,
             bf16=False,
+            gradient_checkpointing=True,
             logging_steps=10,
             eval_strategy="steps",
             eval_steps=50,
