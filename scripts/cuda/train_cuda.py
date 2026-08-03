@@ -142,8 +142,8 @@ def run_sft_training(
         sft_config_kwargs = {
             "output_dir": output_adapter_dir,
             "per_device_train_batch_size": batch_size,
-            "per_device_eval_batch_size": batch_size,
-            "eval_accumulation_steps": 2,
+            "per_device_eval_batch_size": 1,  # Keep eval batch size=1 to guarantee ZERO VRAM OOM during validation
+            "eval_accumulation_steps": 1,    # Transfer eval tensors to CPU immediately
             "gradient_accumulation_steps": grad_accum,
             "learning_rate": learning_rate,
             "lr_scheduler_type": "cosine",
@@ -192,8 +192,8 @@ def run_sft_training(
         training_args = TrainingArguments(
             output_dir=output_adapter_dir,
             per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=batch_size,
-            eval_accumulation_steps=2,
+            per_device_eval_batch_size=1,
+            eval_accumulation_steps=1,
             gradient_accumulation_steps=grad_accum,
             learning_rate=learning_rate,
             lr_scheduler_type="cosine",
