@@ -73,6 +73,9 @@ def run_sft_training(
     os.makedirs(output_adapter_dir, exist_ok=True)
     logger.info("Output Adapter Directory: %s", output_adapter_dir)
 
+    local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    is_ddp = local_rank != -1
+
     if model is None or tokenizer is None:
         logger.info("Loading Base Model...")
         bnb_config = None
@@ -86,8 +89,14 @@ def run_sft_training(
                 bnb_4bit_use_double_quant=True,
             )
             model_kwargs["quantization_config"] = bnb_config
-            model_kwargs["device_map"] = "auto"
             model_kwargs["torch_dtype"] = torch.float16
+
+            if is_ddp:
+                logger.info("DDP Active: Binding Process to GPU %d", local_rank)
+                torch.cuda.set_device(local_rank)
+                model_kwargs["device_map"] = {"": local_rank}
+            else:
+                model_kwargs["device_map"] = "auto"
 
         model = load_causal_lm_model(hf_model_id, **model_kwargs)
         tokenizer = load_causal_lm_tokenizer(hf_model_id)

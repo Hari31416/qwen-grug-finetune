@@ -30,7 +30,7 @@ This notebook performs end-to-end 4-bit QLoRA fine-tuning, inference, evaluation
 1. **Hyperparameters & Config**: Centralized experimental parameters (epochs, batch sizes, learning rates, limits).
 2. **Repository Clone & Setup**: Automatically clones repository scripts and installs dependencies.
 3. **Base Model Inference**: Load 4-bit quantized base model and run sample generation.
-4. **QLoRA Fine-Tuning**: Execute `run_sft_training()` using the pre-loaded base model (saves VRAM).
+4. **Multi-GPU QLoRA Fine-Tuning**: Execute `run_sft_training()` using `notebook_launcher` to run **both GPUs at 100% compute**.
 5. **Loss Visualization**: Plot Loss Curves and Learning Rate schedule using `plot_latest_training_loss()`.
 6. **GSM8K Benchmarking**: Benchmark Base Model vs. Fine-Tuned Model using `run_gsm8k_eval()`.
 7. **EDA Dashboard**: Plot comparative metrics for Accuracy, Format Compliance, Reasoning Tokens, and Latency.""")
@@ -128,26 +128,41 @@ prompt = "If a train travels 60 mph for 2.5 hours, how far does it go?"
 response = generate_response(model, tokenizer, prompt)
 print("=== BASE MODEL RESPONSE ===\\n", response)""")
 
-    # Section 4: Fine-Tuning
-    add_md("## 4. Fine-Tuning via `run_sft_training` Import")
+    # Section 4: Multi-GPU Fine-Tuning
+    add_md("## 4. Multi-GPU QLoRA Fine-Tuning (100% Dual-GPU Utilization)")
 
-    add_code("""from scripts.cuda.train_cuda import run_sft_training
+    add_code("""import torch
+import gc
+from accelerate import notebook_launcher
+from scripts.cuda.train_cuda import run_sft_training
 
-print("Starting SFT Training with pre-loaded model (reusing VRAM)...")
-trainer = run_sft_training(
-    model_arg=MODEL_ID,
-    data_dir=DATA_DIR,
-    adapter_path=ADAPTER_OUTPUT_DIR,
-    epochs=EPOCHS,
-    batch_size=TRAIN_BATCH_SIZE,
-    grad_accum=GRAD_ACCUM,
-    learning_rate=LEARNING_RATE,
-    max_seq_length=MAX_SEQ_LENGTH,
-    lora_r=LORA_R,
-    lora_alpha=LORA_ALPHA,
-    model=model,
-    tokenizer=tokenizer,
-)""")
+# Free Cell 3 base model from VRAM before spawning DDP workers
+if 'model' in globals():
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+def train_fn():
+    run_sft_training(
+        model_arg=MODEL_ID,
+        data_dir=DATA_DIR,
+        adapter_path=ADAPTER_OUTPUT_DIR,
+        epochs=EPOCHS,
+        batch_size=TRAIN_BATCH_SIZE,
+        grad_accum=GRAD_ACCUM,
+        learning_rate=LEARNING_RATE,
+        max_seq_length=MAX_SEQ_LENGTH,
+        lora_r=LORA_R,
+        lora_alpha=LORA_ALPHA,
+    )
+
+num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
+if num_gpus > 1:
+    print(f"🚀 Spawning Multi-GPU DDP Training across {num_gpus} GPUs inside Notebook...")
+    notebook_launcher(train_fn, num_processes=num_gpus)
+else:
+    print("Starting Single-GPU Training...")
+    train_fn()""")
 
     # Section 5: Plot Loss
     add_md("## 5. Plot Loss Curves & Training Metrics")
@@ -163,6 +178,26 @@ plot_latest_training_loss()""")
     add_code("""import glob
 from peft import PeftModel
 from scripts.cuda.eval_cuda import run_gsm8k_eval
+from scripts.cuda.cuda_utils import load_causal_lm_model, load_causal_lm_tokenizer
+
+# Reload base model for evaluation
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=True,
+) if is_cuda else None
+
+eval_model_kwargs = {"trust_remote_code": True}
+if is_cuda:
+    eval_model_kwargs["quantization_config"] = bnb_config
+    eval_model_kwargs["device_map"] = "auto"
+    eval_model_kwargs["torch_dtype"] = torch.float16
+
+model = load_causal_lm_model(MODEL_ID, **eval_model_kwargs)
+tokenizer = load_causal_lm_tokenizer(MODEL_ID)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
 
 print(f"1. Evaluating Baseline Model on GSM8K (limit={EVAL_LIMIT}, batch_size={EVAL_BATCH_SIZE})...")
 base_eval_results = run_gsm8k_eval(
@@ -265,7 +300,7 @@ if base_eval_results and ft_eval_results:
     out_path = "notebooks/kaggle_grug_finetune.ipynb"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=2)
-    print(f"Successfully generated notebook with VRAM optimization at: {out_path}")
+    print(f"Successfully generated notebook with notebook_launcher DDP at: {out_path}")
 
 if __name__ == "__main__":
     create_notebook()
