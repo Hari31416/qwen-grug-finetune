@@ -143,23 +143,42 @@ def main() -> None:
         from peft import PeftModel
         model = PeftModel.from_pretrained(model, adapter_path)
 
+
+def run_gsm8k_eval(
+    model: Any,
+    tokenizer: Any,
+    limit: Optional[int] = 50,
+    batch_size: int = 4,
+    max_tokens: int = 1024,
+    temp: float = 0.0,
+    top_p: float = 1.0,
+    no_system_prompt: bool = False,
+    split: str = "test",
+    is_adapter: bool = False,
+) -> Dict[str, Any]:
+    """Runs GSM8K evaluation on a given model and tokenizer and returns summary metrics."""
+    import torch
+    from datasets import load_dataset
+
+    is_cuda = torch.cuda.is_available()
+    device = (
+        "cuda" if is_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
+    )
     model.eval()
 
-    logger.info(
-        "Loading Benchmark Dataset: %s (split='%s')...", args.benchmark, args.split
-    )
-    dataset = load_dataset("openai/gsm8k", "main", split=args.split)
+    logger.info("Loading Benchmark Dataset: gsm8k (split='%s')...", split)
+    dataset = load_dataset("openai/gsm8k", "main", split=split)
     samples = list(dataset)
-    if args.limit is not None:
-        logger.info("Limiting evaluation to first %d samples", args.limit)
-        samples = samples[: args.limit]
+    if limit is not None:
+        logger.info("Limiting evaluation to first %d samples", limit)
+        samples = samples[:limit]
 
     results: List[Dict[str, Any]] = []
     total_count = len(samples)
     logger.info("Starting Evaluation of %d samples...", total_count)
 
-    for i in range(0, total_count, args.batch_size):
-        batch_samples = samples[i : i + args.batch_size]
+    for i in range(0, total_count, batch_size):
+        batch_samples = samples[i : i + batch_size]
         batch_prompts = []
         batch_gts = []
 
@@ -171,7 +190,7 @@ def main() -> None:
 
             full_prompt_text = build_user_prompt(question, "gsm8k")
             messages = []
-            if not args.no_system_prompt:
+            if not no_system_prompt:
                 messages.append({"role": "system", "content": STYLE_SYSTEM_PROMPT})
             messages.append({"role": "user", "content": full_prompt_text})
 
@@ -186,10 +205,10 @@ def main() -> None:
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=args.max_tokens,
-                temperature=args.temp if args.temp > 0 else None,
-                top_p=args.top_p if args.temp > 0 else None,
-                do_sample=(args.temp > 0),
+                max_new_tokens=max_tokens,
+                temperature=temp if temp > 0 else None,
+                top_p=top_p if temp > 0 else None,
+                do_sample=(temp > 0),
                 pad_token_id=tokenizer.pad_token_id,
             )
 
@@ -236,18 +255,6 @@ def main() -> None:
             }
             results.append(record)
 
-            logger.info(
-                "[%d/%d] Acc: %s | Think Tok: %d | Ans Tok: %d | Compl: %s | Pred: %s | GT: %s",
-                sample_idx,
-                total_count,
-                "✓" if correct else "✗",
-                thinking_tokens,
-                answer_tokens,
-                "✓" if format_compliance else "✗",
-                predicted_answer,
-                gt,
-            )
-
     # Compute Summary Statistics
     if total_count > 0:
         correct_count = sum(1 for r in results if r["correct"])
@@ -269,25 +276,10 @@ def main() -> None:
             format_compliant_count
         ) = 0
 
-    logger.info("=== Evaluation Summary ===")
-    logger.info("Sample Count:       %d", total_count)
-    logger.info(
-        "Accuracy:           %.4f (%d/%d)", accuracy, correct_count, total_count
-    )
-    logger.info(
-        "Format Compliance:  %.4f (%d/%d)",
-        format_compliance_rate,
-        format_compliant_count,
-        total_count,
-    )
-    logger.info("Mean Think Tokens:  %.2f", mean_thinking_tokens)
-    logger.info("Mean Total Tokens:  %.2f", mean_total_tokens)
-    logger.info("Mean Latency (s):   %.2f", mean_latency)
-
-    subfolder = "finetuned" if args.adapter else "baseline"
+    subfolder = "finetuned" if is_adapter else "baseline"
     output_dir = os.path.join(config.results, subfolder)
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{args.benchmark}.json")
+    output_path = os.path.join(output_dir, "gsm8k.json")
 
     output_data = {
         "summary": {
@@ -309,6 +301,81 @@ def main() -> None:
         json.dump(output_data, f, indent=2)
 
     logger.info("Results saved to: %s", output_path)
+    return output_data["summary"]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Evaluate model on GSM8K using CUDA / MPS / CPU"
+    )
+    parser.add_argument("--model", type=str, default=config.model_mlx_path)
+    parser.add_argument("--benchmark", type=str, default="gsm8k")
+    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--adapter", action="store_true")
+    parser.add_argument("--adapter-path", type=str, default="")
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument(
+        "--max-tokens", type=int, default=config.eval_max_generation_tokens
+    )
+    parser.add_argument("--temp", type=float, default=config.temperature)
+    parser.add_argument("--top-p", type=float, default=config.top_p)
+    parser.add_argument("--no-system-prompt", action="store_true")
+    args = parser.parse_args()
+
+    patch_transformers_lazy_imports()
+
+    import torch
+
+    hf_model_id = resolve_hf_model_id(args.model)
+    is_cuda = torch.cuda.is_available()
+    device = (
+        "cuda" if is_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
+    )
+
+    model_kwargs = {}
+    if is_cuda:
+        from transformers import BitsAndBytesConfig
+
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
+        model_kwargs["quantization_config"] = bnb_config
+        model_kwargs["device_map"] = "auto"
+        model_kwargs["torch_dtype"] = torch.float16
+
+    model = load_causal_lm_model(hf_model_id, **model_kwargs)
+    if not is_cuda:
+        model.to(device)
+
+    tokenizer = load_causal_lm_tokenizer(hf_model_id)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+
+    if args.adapter:
+        if not args.adapter_path:
+            logger.error("--adapter flag requires --adapter-path specified")
+            sys.exit(1)
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, args.adapter_path)
+
+    run_gsm8k_eval(
+        model=model,
+        tokenizer=tokenizer,
+        limit=args.limit,
+        batch_size=args.batch_size,
+        max_tokens=args.max_tokens,
+        temp=args.temp,
+        top_p=args.top_p,
+        no_system_prompt=args.no_system_prompt,
+        split=args.split,
+        is_adapter=args.adapter,
+    )
 
 
 if __name__ == "__main__":

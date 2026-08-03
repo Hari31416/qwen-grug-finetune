@@ -7,97 +7,113 @@ Unlike Apple Silicon scripts which use `mlx_lm`, these scripts utilize `torch`, 
 ## Scripts Overview
 
 - **`download_data.py`**: Downloads dataset splits (`train.jsonl` and `valid.jsonl`) directly from the Hugging Face repository (`hari31416/qwen-grug-finetune`).
-- **`train_cuda.py`**: QLoRA SFT fine-tuning on 2x T4 GPUs using Hugging Face `SFTTrainer` and `bitsandbytes`.
-- **`eval_cuda.py`**: GSM8K benchmark evaluation on base or fine-tuned LoRA models.
-- **`generate_cuda.py`**: Single-prompt generation script for quick inference on CUDA GPUs.
+- **`train_cuda.py`**: QLoRA SFT fine-tuning on 2x T4 GPUs using Hugging Face `SFTTrainer` and `bitsandbytes`. Exposes `run_sft_training()`.
+- **`eval_cuda.py`**: GSM8K benchmark evaluation on base or fine-tuned LoRA models. Exposes `run_gsm8k_eval()`.
+- **`generate_cuda.py`**: Single-prompt generation script for quick inference on CUDA GPUs. Exposes `generate_response()`.
+- **`plot_loss.py`**: Visualizes loss curves, learning rate schedule, and benchmark performance metrics.
 
-## Running in Kaggle or Colab Notebooks
+---
 
-### 1. Notebook Settings
+## Interactive Jupyter Notebook Workflow (Recommended)
 
-- **Kaggle**: In the right sidebar, select Accelerator **GPU T4 x2** and set Internet to **On**.
-- **Google Colab**: Select **Runtime** > **Change runtime type** > **T4 GPU**.
+An interactive notebook **[notebooks/kaggle_grug_finetune.ipynb](file:///Users/hari/Desktop/sandbox/qwen-finetune/notebooks/kaggle_grug_finetune.ipynb)** is available for execution in Kaggle or Colab without needing shell commands.
 
-### 2. Clone Repository and Install Dependencies
+### 1. Open Notebook in Kaggle / Colab
 
-Execute in the first notebook cell (do NOT upgrade pre-installed `torch` or `transformers` to avoid CUDA driver conflicts):
+1. **Kaggle**: Select Accelerator **GPU T4 x2** and turn Internet **On**.
+2. Open `notebooks/kaggle_grug_finetune.ipynb`.
 
-```bash
-!git clone https://github.com/Hari31416/qwen-grug-finetune.git
-%cd qwen-grug-finetune
-!pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub
+### 2. Centralized Experimental Parameters (Top Cell)
+
+Modify hyperparameters in the first configuration cell:
+
+```python
+# Model & Environment Paths
+MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+DATA_DIR = "data"
+ADAPTER_OUTPUT_DIR = "adapters"
+
+# Training Hyperparameters
+EPOCHS = 1                # Training epochs
+TRAIN_BATCH_SIZE = 2      # Per-device batch size
+GRAD_ACCUM = 4            # Gradient accumulation steps
+LEARNING_RATE = 2e-4      # Learning rate
+MAX_SEQ_LENGTH = 1536     # Max token length
+LORA_R = 16               # LoRA rank
+LORA_ALPHA = 32           # LoRA alpha
+
+# Evaluation Hyperparameters
+EVAL_LIMIT = 50           # Sample limit for fast evaluation
+EVAL_BATCH_SIZE = 2       # Per-device evaluation batch size
+EVAL_MAX_TOKENS = 1024     # Max generation tokens
 ```
 
-### 3. Download SFT Dataset
+### 3. Execution via Direct Python Imports
 
-Download training and validation datasets from Hugging Face:
+```python
+# 1. Download SFT Dataset
+from scripts.cuda.download_data import download_hf_data
+download_hf_data(output_dir=DATA_DIR)
+
+# 2. SFT Fine-Tuning
+from scripts.cuda.train_cuda import run_sft_training
+trainer = run_sft_training(
+    model_arg=MODEL_ID, data_dir=DATA_DIR, adapter_path=ADAPTER_OUTPUT_DIR,
+    epochs=EPOCHS, batch_size=TRAIN_BATCH_SIZE, grad_accum=GRAD_ACCUM,
+    learning_rate=LEARNING_RATE, max_seq_length=MAX_SEQ_LENGTH
+)
+
+# 3. Plot Training & Validation Loss
+from scripts.cuda.plot_loss import plot_latest_training_loss
+plot_latest_training_loss()
+
+# 4. GSM8K Benchmark Evaluation
+from scripts.cuda.eval_cuda import run_gsm8k_eval
+base_metrics = run_gsm8k_eval(model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE)
+ft_metrics = run_gsm8k_eval(ft_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True)
+```
+
+---
+
+## Command Line (CLI) Workflow
+
+### 1. Download Dataset
 
 ```bash
 !python scripts/cuda/download_data.py --output-dir data
 ```
 
-### 4. Fine-Tune Model on 2x T4 GPUs
-
-Run QLoRA SFT fine-tuning (automatically uses 2x T4 GPUs via `device_map="auto"`):
+### 2. Fine-Tune Model on 2x T4 GPUs
 
 ```bash
 !python scripts/cuda/train_cuda.py \
   --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B \
   --data data \
-  --epochs 3 \
+  --epochs 1 \
   --batch-size 2 \
   --grad-accum 4
 ```
 
-### 5. Plot Training & Validation Loss
-
-Visualize loss curves and learning rate schedule inside the notebook:
+### 3. Plot Training Loss
 
 ```python
 !python scripts/cuda/plot_loss.py
 ```
 
-### 6. Evaluate Base and Fine-Tuned Models
-
-Evaluate accuracy, latency, and format compliance on GSM8K:
+### 4. Evaluate Base and Fine-Tuned Models
 
 ```python
-import os, glob
-
-# Evaluate Base Model
 !python scripts/cuda/eval_cuda.py \
   --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B \
   --benchmark gsm8k \
-  --limit 100 \
-  --batch-size 4
-
-# Resolve latest trained adapter folder
-adapter_dirs = glob.glob("adapters/**/final_adapters", recursive=True)
-latest_adapter = max(adapter_dirs, key=os.path.getmtime)
-print(f"Latest adapter found: {latest_adapter}")
-
-# Evaluate Fine-Tuned Model
-!python scripts/cuda/eval_cuda.py \
-  --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B \
-  --adapter \
-  --adapter-path {latest_adapter} \
-  --limit 100
+  --limit 50
 ```
 
-### 6. Run Sample Generation
+### 5. Compress Adapters for Download
 
-Test reasoning and response generation with the fine-tuned adapter:
-
-```python
-!python scripts/cuda/generate_cuda.py \
-  --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B \
-  --adapter-path {latest_adapter} \
-  --prompt "Solve: If a train travels 60 mph for 2.5 hours, how far does it go?"
+```bash
+!zip -r fine_tuned_adapters.zip adapters/
 ```
-
-### 7. Compress and Save Adapters
-
-Zip adapter weights for download from notebook outputs:
 
 ```bash
 !zip -r fine_tuned_adapters.zip adapters/

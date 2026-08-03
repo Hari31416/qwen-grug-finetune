@@ -23,74 +23,19 @@ logging.basicConfig(
 logger = logging.getLogger("train_cuda")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="CUDA / Cross-Platform QLoRA Fine-Tuning script using Hugging Face transformers/trl"
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=config.model_mlx_path,
-        help="Hugging Face model ID (e.g. deepseek-ai/DeepSeek-R1-Distill-Qwen-7B)",
-    )
-    parser.add_argument(
-        "--data",
-        type=str,
-        default=config.data_dir,
-        help="Directory containing train.jsonl and valid.jsonl",
-    )
-    parser.add_argument(
-        "--adapter-path",
-        type=str,
-        default=config.adapters,
-        help="Base directory to save output LoRA adapters",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=3,
-        help="Number of training epochs (default: 3)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=2,
-        help="Per-device train batch size (default: 2)",
-    )
-    parser.add_argument(
-        "--grad-accum",
-        type=int,
-        default=4,
-        help="Gradient accumulation steps (default: 4)",
-    )
-    parser.add_argument(
-        "--learning-rate",
-        type=float,
-        default=2e-4,
-        help="Learning rate (default: 2e-4)",
-    )
-    parser.add_argument(
-        "--max-seq-length",
-        type=int,
-        default=1536,
-        help="Maximum sequence length for training",
-    )
-    parser.add_argument(
-        "--lora-r",
-        type=int,
-        default=16,
-        help="LoRA rank (default: 16)",
-    )
-    parser.add_argument(
-        "--lora-alpha",
-        type=int,
-        default=32,
-        help="LoRA alpha (default: 32)",
-    )
-
-    args = parser.parse_args()
-
-    # Apply patch to prevent BloomPreTrainedModel ModuleNotFoundError in Kaggle/Colab
+def run_sft_training(
+    model_arg: str = config.model_mlx_path,
+    data_dir: str = config.data_dir,
+    adapter_path: str = config.adapters,
+    epochs: int = 3,
+    batch_size: int = 2,
+    grad_accum: int = 4,
+    learning_rate: float = 2e-4,
+    max_seq_length: int = 1536,
+    lora_r: int = 16,
+    lora_alpha: int = 32,
+) -> Any:
+    """Executes SFT QLoRA fine-tuning training and returns the trainer instance."""
     patch_transformers_lazy_imports()
 
     import torch
@@ -99,7 +44,7 @@ def main() -> None:
     from peft import LoraConfig, prepare_model_for_kbit_training
     from trl import SFTTrainer
 
-    hf_model_id = resolve_hf_model_id(args.model)
+    hf_model_id = resolve_hf_model_id(model_arg)
     logger.info("Using Hugging Face Base Model ID: %s", hf_model_id)
 
     is_cuda = torch.cuda.is_available()
@@ -113,16 +58,16 @@ def main() -> None:
             "CUDA is not available on this system. Running in fallback mode (MPS/CPU) for testing."
         )
 
-    train_file = os.path.join(args.data, "train.jsonl")
-    valid_file = os.path.join(args.data, "valid.jsonl")
+    train_file = os.path.join(data_dir, "train.jsonl")
+    valid_file = os.path.join(data_dir, "valid.jsonl")
 
     if not os.path.exists(train_file) or not os.path.exists(valid_file):
-        logger.error("Required dataset files train.jsonl / valid.jsonl not found in %s", args.data)
+        logger.error("Required dataset files train.jsonl / valid.jsonl not found in %s", data_dir)
         sys.exit(1)
 
     # Setup output directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_adapter_dir = os.path.join(args.adapter_path, timestamp)
+    output_adapter_dir = os.path.join(adapter_path, timestamp)
     os.makedirs(output_adapter_dir, exist_ok=True)
     logger.info("Output Adapter Directory: %s", output_adapter_dir)
 
@@ -160,8 +105,8 @@ def main() -> None:
 
     # LoRA Config
     peft_config = LoraConfig(
-        r=args.lora_r,
-        lora_alpha=args.lora_alpha,
+        r=lora_r,
+        lora_alpha=lora_alpha,
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
@@ -184,11 +129,11 @@ def main() -> None:
 
         sft_config_kwargs = {
             "output_dir": output_adapter_dir,
-            "per_device_train_batch_size": args.batch_size,
-            "per_device_eval_batch_size": args.batch_size,
+            "per_device_train_batch_size": batch_size,
+            "per_device_eval_batch_size": batch_size,
             "eval_accumulation_steps": 2,
-            "gradient_accumulation_steps": args.grad_accum,
-            "learning_rate": args.learning_rate,
+            "gradient_accumulation_steps": grad_accum,
+            "learning_rate": learning_rate,
             "lr_scheduler_type": "cosine",
             "warmup_ratio": 0.03,
             "fp16": False,  # BitsAndBytes handles FP16 compute natively; disable AMP GradScaler to prevent unscale_ error
@@ -198,11 +143,11 @@ def main() -> None:
             "eval_strategy": "steps",
             "eval_steps": 50,
             "save_steps": 50,
-            "num_train_epochs": args.epochs,
+            "num_train_epochs": epochs,
             "save_total_limit": 2,
             "report_to": "none",
             "dataset_text_field": "text",
-            "max_length": args.max_seq_length,
+            "max_length": max_seq_length,
         }
         # Use standard 'nll' loss to prevent TRL from defaulting to 'chunked_nll' (which crashes on 4-bit PEFT models)
         try:
@@ -234,11 +179,11 @@ def main() -> None:
         logger.warning("Initializing with SFTConfig failed (%s). Falling back to TrainingArguments...", exc)
         training_args = TrainingArguments(
             output_dir=output_adapter_dir,
-            per_device_train_batch_size=args.batch_size,
-            per_device_eval_batch_size=args.batch_size,
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=batch_size,
             eval_accumulation_steps=2,
-            gradient_accumulation_steps=args.grad_accum,
-            learning_rate=args.learning_rate,
+            gradient_accumulation_steps=grad_accum,
+            learning_rate=learning_rate,
             lr_scheduler_type="cosine",
             warmup_ratio=0.03,
             fp16=False,
@@ -248,7 +193,7 @@ def main() -> None:
             eval_strategy="steps",
             eval_steps=50,
             save_steps=50,
-            num_train_epochs=args.epochs,
+            num_train_epochs=epochs,
             save_total_limit=2,
             report_to="none",
         )
@@ -296,6 +241,35 @@ def main() -> None:
     trainer.model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
     logger.info("Training Completed Successfully!")
+    return trainer
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="CUDA / Cross-Platform QLoRA Fine-Tuning script")
+    parser.add_argument("--model", type=str, default=config.model_mlx_path)
+    parser.add_argument("--data", type=str, default=config.data_dir)
+    parser.add_argument("--adapter-path", type=str, default=config.adapters)
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--grad-accum", type=int, default=4)
+    parser.add_argument("--learning-rate", type=float, default=2e-4)
+    parser.add_argument("--max-seq-length", type=int, default=1536)
+    parser.add_argument("--lora-r", type=int, default=16)
+    parser.add_argument("--lora-alpha", type=int, default=32)
+    args = parser.parse_args()
+
+    run_sft_training(
+        model_arg=args.model,
+        data_dir=args.data,
+        adapter_path=args.adapter_path,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        grad_accum=args.grad_accum,
+        learning_rate=args.learning_rate,
+        max_seq_length=args.max_seq_length,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+    )
 
 
 if __name__ == "__main__":
