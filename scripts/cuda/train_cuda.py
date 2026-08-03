@@ -194,13 +194,14 @@ def main() -> None:
             "dataset_text_field": "text",
             "max_length": args.max_seq_length,
         }
-        # Disable TRL experimental chunked cross-entropy loss to prevent AttributeError on 4-bit PEFT models
+        # Use standard 'nll' loss to prevent TRL from defaulting to 'chunked_nll' (which crashes on 4-bit PEFT models)
         try:
-            sft_config_kwargs["loss_type"] = "for_causal_lm"
+            sft_config_kwargs["loss_type"] = "nll"
             sft_config = SFTConfig(**sft_config_kwargs)
-        except TypeError:
+        except Exception:
             sft_config_kwargs.pop("loss_type", None)
             sft_config = SFTConfig(**sft_config_kwargs)
+
         try:
             trainer = SFTTrainer(
                 model=model,
@@ -243,32 +244,18 @@ def main() -> None:
                 train_dataset=dataset["train"],
                 eval_dataset=dataset["validation"],
                 peft_config=peft_config,
-                dataset_text_field="text",
-                max_seq_length=args.max_seq_length,
                 processing_class=tokenizer,
                 args=training_args,
             )
         except TypeError:
-            try:
-                trainer = SFTTrainer(
-                    model=model,
-                    train_dataset=dataset["train"],
-                    eval_dataset=dataset["validation"],
-                    peft_config=peft_config,
-                    dataset_text_field="text",
-                    max_seq_length=args.max_seq_length,
-                    tokenizer=tokenizer,
-                    args=training_args,
-                )
-            except TypeError:
-                trainer = SFTTrainer(
-                    model=model,
-                    train_dataset=dataset["train"],
-                    eval_dataset=dataset["validation"],
-                    peft_config=peft_config,
-                    processing_class=tokenizer,
-                    args=training_args,
-                )
+            trainer = SFTTrainer(
+                model=model,
+                train_dataset=dataset["train"],
+                eval_dataset=dataset["validation"],
+                peft_config=peft_config,
+                tokenizer=tokenizer,
+                args=training_args,
+            )
 
     logger.info("Starting SFT Training...")
     trainer.train()
