@@ -153,6 +153,10 @@ def main() -> None:
 
     if is_cuda:
         model = prepare_model_for_kbit_training(model)
+        # Cast any bfloat16 parameters to float16 to prevent dtype mismatch on T4 GPUs
+        for name, param in model.named_parameters():
+            if param.dtype == torch.bfloat16:
+                param.data = param.data.to(torch.float16)
 
     # LoRA Config
     peft_config = LoraConfig(
@@ -183,7 +187,7 @@ def main() -> None:
             "learning_rate": args.learning_rate,
             "lr_scheduler_type": "cosine",
             "warmup_ratio": 0.03,
-            "fp16": is_cuda,
+            "fp16": False,  # BitsAndBytes handles FP16 compute natively; disable AMP GradScaler to prevent unscale_ error
             "bf16": False,
             "logging_steps": 10,
             "eval_strategy": "steps",
@@ -230,7 +234,7 @@ def main() -> None:
             learning_rate=args.learning_rate,
             lr_scheduler_type="cosine",
             warmup_ratio=0.03,
-            fp16=is_cuda,
+            fp16=False,
             bf16=False,
             logging_steps=10,
             eval_strategy="steps",
