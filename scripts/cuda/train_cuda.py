@@ -4,7 +4,7 @@ import argparse
 import logging
 import datetime
 import json
-from typing import Optional
+from typing import Any, Optional
 
 # Add workspace root to Python path to import config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
