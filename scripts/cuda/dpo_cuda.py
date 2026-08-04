@@ -136,6 +136,15 @@ def run_dpo_training(
             task_type="CAUSAL_LM",
         )
 
+    if is_cuda:
+        # Cast any bfloat16 parameters or buffers to float16 to prevent unsupported BFloat16 AMP ops on T4 GPUs
+        for name, param in model.named_parameters():
+            if param.dtype == torch.bfloat16:
+                param.data = param.data.to(torch.float16)
+        for name, buf in model.named_buffers():
+            if buf.dtype == torch.bfloat16:
+                buf.data = buf.data.to(torch.float16)
+
     # 4. Define DPO Training Arguments
     import inspect
     import datetime
@@ -158,7 +167,10 @@ def run_dpo_training(
         "save_steps": 20,
         "eval_strategy": "steps" if eval_dataset else "no",
         "eval_steps": 20 if eval_dataset else None,
-        "fp16": is_cuda,
+        "fp16": False,  # BitsAndBytes handles FP16 compute natively; disable AMP GradScaler to prevent unscale_ error on T4
+        "bf16": False,
+        "fp16_full_eval": False,
+        "bf16_full_eval": False,
         "optim": "adamw_torch",
         "remove_unused_columns": False,
         "report_to": "none",
