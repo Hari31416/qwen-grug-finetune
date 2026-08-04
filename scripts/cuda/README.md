@@ -16,7 +16,7 @@ Unlike Apple Silicon scripts which use `mlx_lm`, these scripts utilize `torch`, 
 
 ## Interactive Jupyter Notebook Workflow (Recommended)
 
-An interactive notebook **[notebooks/kaggle_grug_finetune.ipynb](file:///Users/hari/Desktop/sandbox/qwen-finetune/notebooks/kaggle_grug_finetune.ipynb)** is available for execution in Kaggle or Colab without needing shell commands.
+An interactive notebook **[notebooks/kaggle_grug_finetune.ipynb](../../notebooks/kaggle_grug_finetune.ipynb)** is available for execution in Kaggle or Colab without needing shell commands.
 
 ### 1. Open Notebook in Kaggle / Colab
 
