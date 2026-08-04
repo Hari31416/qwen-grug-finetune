@@ -136,30 +136,55 @@ def run_dpo_training(
             task_type="CAUSAL_LM",
         )
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    final_output_dir = os.path.join(output_dir, timestamp)
-    os.makedirs(final_output_dir, exist_ok=True)
-
     # 4. Define DPO Training Arguments
-    training_args = DPO_CONFIG_CLASS(
-        output_dir=final_output_dir,
-        num_train_epochs=epochs,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
-        gradient_accumulation_steps=grad_accum,
-        learning_rate=learning_rate,
-        lr_scheduler_type="cosine",
-        warmup_ratio=0.1,
-        logging_steps=5,
-        save_strategy="steps",
-        save_steps=20,
-        eval_strategy="steps" if eval_dataset else "no",
-        eval_steps=20 if eval_dataset else None,
-        fp16=is_cuda,
-        optim="adamw_torch",
-        remove_unused_columns=False,
-        report_to="none",
-    )
+    is_dpo_config = False
+    try:
+        from trl import DPOConfig
+        training_args = DPOConfig(
+            output_dir=final_output_dir,
+            num_train_epochs=epochs,
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=batch_size,
+            gradient_accumulation_steps=grad_accum,
+            learning_rate=learning_rate,
+            lr_scheduler_type="cosine",
+            warmup_ratio=0.1,
+            logging_steps=5,
+            save_strategy="steps",
+            save_steps=20,
+            eval_strategy="steps" if eval_dataset else "no",
+            eval_steps=20 if eval_dataset else None,
+            fp16=is_cuda,
+            optim="adamw_torch",
+            remove_unused_columns=False,
+            report_to="none",
+            beta=beta,
+            max_length=max_length,
+            max_prompt_length=max_prompt_length,
+        )
+        is_dpo_config = True
+        logger.info("Using TRL DPOConfig for training setup.")
+    except Exception as cfg_err:
+        logger.info("Using standard TrainingArguments fallback: %s", cfg_err)
+        training_args = TrainingArguments(
+            output_dir=final_output_dir,
+            num_train_epochs=epochs,
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=batch_size,
+            gradient_accumulation_steps=grad_accum,
+            learning_rate=learning_rate,
+            lr_scheduler_type="cosine",
+            warmup_ratio=0.1,
+            logging_steps=5,
+            save_strategy="steps",
+            save_steps=20,
+            eval_strategy="steps" if eval_dataset else "no",
+            eval_steps=20 if eval_dataset else None,
+            fp16=is_cuda,
+            optim="adamw_torch",
+            remove_unused_columns=False,
+            report_to="none",
+        )
 
     # 5. Initialize DPOTrainer
     logger.info("Initializing DPOTrainer (beta=%.3f, lr=%.2e)...", beta, learning_rate)
@@ -167,22 +192,34 @@ def run_dpo_training(
         "model": model,
         "ref_model": None,  # PEFT uses adapter-disabled base model as reference implicitly
         "args": training_args,
-        "beta": beta,
         "train_dataset": train_dataset,
         "eval_dataset": eval_dataset,
-        "tokenizer": tokenizer,
         "peft_config": peft_config,
-        "max_length": max_length,
-        "max_prompt_length": max_prompt_length,
         "callbacks": [ClearCacheCallback()],
     }
 
-    try:
-        dpo_trainer = DPOTrainer(**dpo_kwargs)
-    except TypeError:
-        # Compatibility with newer TRL where tokenizer is passed as processing_class
-        dpo_kwargs["processing_class"] = dpo_kwargs.pop("tokenizer")
-        dpo_trainer = DPOTrainer(**dpo_kwargs)
+    if not is_dpo_config:
+        dpo_kwargs["beta"] = beta
+        dpo_kwargs["max_length"] = max_length
+        dpo_kwargs["max_prompt_length"] = max_prompt_length
+
+    # Inspect signature of DPOTrainer.__init__ dynamically for version compatibility
+    import inspect
+    sig = inspect.signature(DPOTrainer.__init__)
+    param_names = set(sig.parameters.keys())
+
+    if "processing_class" in param_names:
+        dpo_kwargs["processing_class"] = tokenizer
+    else:
+        dpo_kwargs["tokenizer"] = tokenizer
+
+    has_var_kwargs = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if not has_var_kwargs:
+        dpo_kwargs = {k: v for k, v in dpo_kwargs.items() if k in param_names}
+
+    dpo_trainer = DPOTrainer(**dpo_kwargs)
 
     logger.info("Starting DPO Fine-Tuning...")
     dpo_trainer.train()
