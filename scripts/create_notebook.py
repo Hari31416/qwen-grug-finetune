@@ -2,9 +2,9 @@
 import json
 import os
 
-def create_notebook():
-    cells = []
 
+def create_cell_helpers():
+    cells = []
     def add_md(text):
         cells.append({
             "cell_type": "markdown",
@@ -13,37 +13,76 @@ def create_notebook():
         })
 
     def add_code(text):
-        cells.append({
-            "cell_type": "code",
-            "execution_count": None,
-            "metadata": {},
-            "outputs": [],
-            "source": [line + "\n" for line in text.strip().split("\n")]
-        })
+        cells.append(
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "source": [line + "\n" for line in text.strip().split("\n")],
+            }
+        )
+    return cells, add_md, add_code
 
-    # Title
-    add_md("""# Grug Reasoning Fine-Tuning: Kaggle / CUDA Interactive Notebook
 
-This notebook performs end-to-end 4-bit QLoRA fine-tuning, inference, evaluation, and loss visualization on **DeepSeek-R1-Distill-Qwen-7B**.
+def save_notebook(cells, filename):
+    nb = {
+        "cells": cells,
+        "metadata": {"language_info": {"name": "python"}},
+        "nbformat": 4,
+        "nbformat_minor": 2,
+    }
+    os.makedirs("notebooks", exist_ok=True)
+    out_path = os.path.join("notebooks", filename)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(nb, f, indent=2)
+    print(f"✅ Generated notebook: {out_path}")
 
-### Notebook Workflow:
-1. **Hyperparameters & Config**: Centralized experimental parameters (epochs, batch sizes, learning rates, limits).
-2. **Repository Clone & Setup**: Automatically clones repository scripts and installs dependencies.
-3. **Base Model Inference**: Load 4-bit quantized base model and run sample generation.
-4. **QLoRA Fine-Tuning**: Execute `run_sft_training()` directly in notebook kernel.
-5. **Loss Visualization**: Plot Loss Curves and Learning Rate schedule using `plot_latest_training_loss()`.
+
+# ==============================================================================
+# NOTEBOOK 1: SFT FINE-TUNING & EVALUATION PIPELINE
+# ==============================================================================
+def generate_sft_notebook():
+    cells, add_md, add_code = create_cell_helpers()
+
+    # Top Standalone Overview Cell
+    add_md(
+        """# Telegraphic SFT Alignment Pipeline (DeepSeek-R1-7B)
+
+## 🎯 What Are We Doing?
+We are performing end-to-end 4-bit QLoRA Supervised Fine-Tuning (SFT) on `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` followed by GSM8K benchmark evaluation, qualitative reasoning trace inspection, and comparative dashboard plotting.
+
+## 💡 Why Are We Doing It?
+Standard reasoning models emit verbose, multi-paragraph reasoning traces before giving an answer. This SFT pipeline aligns the model to produce **telegraphic, token-dense `<think>` blocks** (reducing reasoning tokens by ~50%) while maintaining strict `<think>...</think>` format compliance and preserving mathematical accuracy without system prompt regurgitation.
+
+## 🛠️ Code Source & Infrastructure
+- **GitHub Repository:** [Hari31416/qwen-grug-finetune](https://github.com/Hari31416/qwen-grug-finetune.git)
+- **Frameworks Used:** PyTorch, Hugging Face `transformers`, `peft` (LoRA), `trl` (`SFTTrainer`), `bitsandbytes` (4-bit NF4 quantization).
+- **Target Hardware:** 2x NVIDIA T4 GPUs (Kaggle / Google Colab CUDA environment).
+
+## 📊 Data Source
+- **Hugging Face Dataset Repository:** [hari31416/qwen-grug-finetune](https://huggingface.co/datasets/hari31416/qwen-grug-finetune) (1,701 stratified reasoning samples across StrategyQA, LogiQA, BoolQ, ANLI, PIQA, and ReClor).
+- **Evaluation Benchmark:** [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) (Grade School Math reasoning test split).
+
+---
+
+### Notebook Execution Workflow:
+1. **Centralized Hyperparameters**: Configure SFT experimental parameters (epochs, batch size, learning rates, limits).
+2. **Environment & Data Setup**: Clone repository, install dependencies, and download SFT dataset splits.
+3. **Base Model Inference**: Load 4-bit NF4 quantized base model and run sample generation.
+4. **SFT Fine-Tuning Execution**: Execute `run_sft_training()` directly in the notebook kernel.
+5. **Loss Visualization**: Plot Loss Curves and Learning Rate decay schedule using `plot_latest_training_loss()`.
 6. **GSM8K Benchmarking**: Benchmark Base Model vs. Fine-Tuned Model using `run_gsm8k_eval()`.
-7. **EDA Dashboard**: Plot comparative metrics for Accuracy, Format Compliance, Reasoning Tokens, and Latency.
-8. **Export Artifacts Package**: Zip trained adapters, evaluation JSONs, and plot images into a single downloadable ZIP file.""")
+7. **Qualitative Sample Inspection**: Print side-by-side reasoning traces before and after SFT.
+8. **EDA Dashboard**: Plot comparative metrics for Accuracy (%) and Token Count Breakdown.
+9. **Export Artifacts Package**: Zip trained adapters, evaluation JSONs, and plot images into a downloadable ZIP file."""
+    )
 
-    # Section 1: Hyperparameters
-    add_md("## 1. Centralized Hyperparameters & Configuration")
-
-    add_code("""# ==========================================
-# ⚙️ EXPERIMENTAL HYPERPARAMETERS & CONFIG
+    add_md("## 1. Centralized SFT Hyperparameters & Configuration")
+    add_code(
+        """# ==========================================
+# ⚙️ SFT EXPERIMENTAL HYPERPARAMETERS & CONFIG
 # ==========================================
 
-# Repository & Dataset Paths
 REPO_URL = "https://github.com/Hari31416/qwen-grug-finetune.git"
 REPO_NAME = "qwen-grug-finetune"
 MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
@@ -51,29 +90,30 @@ DATA_DIR = "data"
 ADAPTER_OUTPUT_DIR = "adapters"
 
 # Training Hyperparameters
-EPOCHS = 1                # Number of training epochs (e.g. 1 or 3)
-TRAIN_BATCH_SIZE = 1      # Per-device batch size (1 provides max VRAM headroom & prevents OOM)
+EPOCHS = 1                # 1 epoch for optimal style adaptation without overfitting
+TRAIN_BATCH_SIZE = 1      # Per-device batch size (1 max VRAM headroom on T4 GPUs)
 GRAD_ACCUM = 8            # Gradient accumulation steps (Effective batch size = 1 * 8 = 8)
-LEARNING_RATE = 2e-4      # Peak learning rate
-MAX_SEQ_LENGTH = 1536     # Maximum token sequence length for training
+LEARNING_RATE = 2e-4      # Peak SFT learning rate
+MAX_SEQ_LENGTH = 1536     # Max token sequence length for training
 LORA_R = 16               # LoRA rank dimension
 LORA_ALPHA = 32           # LoRA alpha scaling factor
 
 # Benchmark Evaluation Hyperparameters
-EVAL_LIMIT = 50           # Limit number of GSM8K test samples for fast evaluation (e.g., 50 or 100)
-EVAL_BATCH_SIZE = 1       # Per-device evaluation batch size (keep low to prevent VRAM OOM)
-EVAL_MAX_TOKENS = 1024     # Max generation tokens per GSM8K problem""")
+EVAL_LIMIT = None         # Set to None for FULL benchmark evaluation (all 1,000 test samples), or set e.g. 50 for quick debugging
+EVAL_BATCH_SIZE = 1       # Per-device evaluation batch size
+EVAL_MAX_TOKENS = 1024     # Max generation tokens per GSM8K problem"""
+    )
 
-    # Section 2: Repository Clone & Setup
-    add_md("## 2. Repository Clone & Environment Setup")
+    add_md("## 2. Environment Setup & Data Download")
+    add_code(
+        """import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-    add_code("""# Install required Python packages (omitting -U torch to prevent CUDA driver conflicts)
-%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas""")
+%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas pyyaml"""
+    )
 
-    add_code("""import sys
-import os
-
-# Automatically clone repo scripts if running in fresh Kaggle / Colab session
+    add_code(
+        """import sys
 if not os.path.exists("scripts") and not os.path.exists(f"{REPO_NAME}/scripts"):
     print(f"Cloning {REPO_URL} into workspace...")
     !git clone {REPO_URL}
@@ -82,68 +122,49 @@ if not os.path.exists("scripts") and not os.path.exists(f"{REPO_NAME}/scripts"):
 elif os.path.exists(REPO_NAME) and os.path.exists(f"{REPO_NAME}/scripts"):
     %cd {REPO_NAME}
 
-# Add repository root to python path
 sys.path.append(".")
-
 from scripts.cuda.cuda_utils import patch_transformers_lazy_imports
 from scripts.cuda.download_data import download_hf_data
 
-# Apply Kaggle/Colab lazy import patches & download dataset
 patch_transformers_lazy_imports()
-download_hf_data(output_dir=DATA_DIR)""")
+download_hf_data(output_dir=DATA_DIR)"""
+    )
 
-    # Section 3: Base Model Inference
     add_md("## 3. Base Model Inference")
-
-    add_code("""import torch
+    add_code(
+        """import torch
 from transformers import BitsAndBytesConfig
 from scripts.cuda.cuda_utils import load_causal_lm_model, load_causal_lm_tokenizer
 from scripts.cuda.generate_cuda import generate_response
 
+print("Loading Base Model:", MODEL_ID)
 is_cuda = torch.cuda.is_available()
-
-# 4-bit Quantization Config
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True,
-) if is_cuda else None
-
-model_kwargs = {"trust_remote_code": True}
+model_kwargs = {}
 if is_cuda:
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=True,
+    )
     model_kwargs["quantization_config"] = bnb_config
     model_kwargs["device_map"] = "auto"
     model_kwargs["torch_dtype"] = torch.float16
 
-print(f"Loading Base Model ({MODEL_ID})...")
-model = load_causal_lm_model(MODEL_ID, **model_kwargs)
 tokenizer = load_causal_lm_tokenizer(MODEL_ID)
+model = load_causal_lm_model(MODEL_ID, **model_kwargs)
 
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-tokenizer.padding_side = "right"
+sample_prompt = "Josh buys a house for $80,000 and puts in $50,000 in repairs. This increased the value of the house by 150%. How much profit did he make?"
+print("\\n--- Base Model Sample Response ---")
+print(generate_response(model, tokenizer, sample_prompt, max_new_tokens=512))"""
+    )
 
-# Test sample inference
-prompt = "If a train travels 60 mph for 2.5 hours, how far does it go?"
-response = generate_response(model, tokenizer, prompt)
-print("=== BASE MODEL RESPONSE ===\\n", response)""")
+    add_md("## 4. Execute SFT QLoRA Fine-Tuning")
+    add_code(
+        """from scripts.cuda.train_cuda import run_sft_training
 
-    # Section 4: Fine-Tuning
-    add_md("## 4. Fine-Tuning via `run_sft_training` Import")
-
-    add_code("""import torch
-import gc
-from scripts.cuda.train_cuda import run_sft_training
-
-# Free Cell 3 base model from VRAM before training
-if 'model' in globals():
-    del model
-    gc.collect()
-    torch.cuda.empty_cache()
-
-print("Starting SFT Training...")
-trainer = run_sft_training(
+print("Starting SFT QLoRA Fine-Tuning...")
+sft_trainer = run_sft_training(
     model_arg=MODEL_ID,
     data_dir=DATA_DIR,
     adapter_path=ADAPTER_OUTPUT_DIR,
@@ -154,187 +175,286 @@ trainer = run_sft_training(
     max_seq_length=MAX_SEQ_LENGTH,
     lora_r=LORA_R,
     lora_alpha=LORA_ALPHA,
-)""")
-
-    # Note for Multi-GPU Accelerate DDP CLI launch
-    add_md("""> **Tip for 100% Dual-GPU Data Parallelism (Optional)**:
-> To run full DDP multi-GPU training with 100% compute on both GPUs concurrently, execute via `accelerate launch`:
-> ```bash
-> !accelerate launch --multi_gpu --num_processes=2 scripts/cuda/train_cuda.py --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B --data data --epochs 1 --batch-size 1 --grad-accum 8
-> ```""")
-
-    # Section 5: Plot Loss
-    add_md("## 5. Plot Loss Curves & Training Metrics")
-
-    add_code("""from scripts.cuda.plot_loss import plot_latest_training_loss
-
-# Generate loss curves and learning rate schedule plots
-plot_latest_training_loss()""")
-
-    # Section 6: GSM8K Evaluation
-    add_md("## 6. Benchmarking Base Model vs. Fine-Tuned Model on GSM8K")
-
-    add_code("""import glob
-from peft import PeftModel
-from scripts.cuda.eval_cuda import run_gsm8k_eval
-from scripts.cuda.cuda_utils import load_causal_lm_model, load_causal_lm_tokenizer
-
-# Reload base model for evaluation
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True,
-) if is_cuda else None
-
-eval_model_kwargs = {"trust_remote_code": True}
-if is_cuda:
-    eval_model_kwargs["quantization_config"] = bnb_config
-    eval_model_kwargs["device_map"] = "auto"
-    eval_model_kwargs["torch_dtype"] = torch.float16
-
-model = load_causal_lm_model(MODEL_ID, **eval_model_kwargs)
-tokenizer = load_causal_lm_tokenizer(MODEL_ID)
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-
-print(f"1. Evaluating Baseline Model on GSM8K (limit={EVAL_LIMIT}, batch_size={EVAL_BATCH_SIZE})...")
-base_eval_results = run_gsm8k_eval(
-    model,
-    tokenizer,
-    limit=EVAL_LIMIT,
-    batch_size=EVAL_BATCH_SIZE,
-    max_tokens=EVAL_MAX_TOKENS,
-    is_adapter=False,
-)
-print("Baseline Summary:", base_eval_results)
-
-adapter_dirs = glob.glob(f"{ADAPTER_OUTPUT_DIR}/**/final_adapters", recursive=True)
-latest_adapter = max(adapter_dirs, key=os.path.getmtime) if adapter_dirs else ""
-
-ft_eval_results = {}
-if latest_adapter:
-    print(f"2. Loading fine-tuned LoRA model from: {latest_adapter}...")
-    ft_model = PeftModel.from_pretrained(model, latest_adapter)
-    ft_model.eval()
-    
-    print(f"3. Evaluating Fine-Tuned Model on GSM8K (limit={EVAL_LIMIT}, batch_size={EVAL_BATCH_SIZE})...")
-    ft_eval_results = run_gsm8k_eval(
-        ft_model,
-        tokenizer,
-        limit=EVAL_LIMIT,
-        batch_size=EVAL_BATCH_SIZE,
-        max_tokens=EVAL_MAX_TOKENS,
-        is_adapter=True,
+    model=model,
+    tokenizer=tokenizer
+)"""
     )
-    print("Fine-Tuned Summary:", ft_eval_results)""")
 
-    # Section 7: EDA Dashboard
-    add_md("## 7. EDA & Comparison Dashboard")
+    add_md("## 5. Plot Training Loss Curves")
+    add_code(
+        """from scripts.cuda.plot_loss import plot_latest_training_loss
 
-    add_code("""import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
+print("Plotting Training & Validation Loss...")
+plot_latest_training_loss()"""
+    )
 
-if base_eval_results and ft_eval_results:
-    sns.set_theme(style="whitegrid")
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    add_md("## 6. GSM8K Benchmark Evaluation (Base vs. SFT)")
+    add_code(
+        """from scripts.cuda.eval_cuda import run_gsm8k_eval
+from peft import PeftModel
 
-    # 1. Accuracy & Format Compliance
-    metrics_df = pd.DataFrame([
-        {"Model": "Baseline", "Metric": "Accuracy", "Value": base_eval_results["accuracy"] * 100},
-        {"Model": "Fine-Tuned", "Metric": "Accuracy", "Value": ft_eval_results["accuracy"] * 100},
-        {"Model": "Baseline", "Metric": "Format Compliance", "Value": base_eval_results["format_compliance_rate"] * 100},
-        {"Model": "Fine-Tuned", "Metric": "Format Compliance", "Value": ft_eval_results["format_compliance_rate"] * 100},
-    ])
-    sns.barplot(data=metrics_df, x="Metric", y="Value", hue="Model", ax=axes[0], palette="viridis")
-    axes[0].set_title("Accuracy & Format Compliance (%)", fontsize=12, fontweight="bold")
-    axes[0].set_ylabel("Percentage (%)")
-    for p in axes[0].patches:
-        if p.get_height() > 0:
-            axes[0].annotate(f"{p.get_height():.1f}%", (p.get_x() + p.get_width() / 2., p.get_height()), ha='center', va='bottom', fontsize=10)
+print("Evaluating Base Model...")
+base_summary = run_gsm8k_eval(model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE)
 
-    # 2. Reasoning Tokens Reduction
-    tok_df = pd.DataFrame([
-        {"Model": "Baseline", "Mean Thinking Tokens": base_eval_results["mean_thinking_tokens"]},
-        {"Model": "Fine-Tuned", "Mean Thinking Tokens": ft_eval_results["mean_thinking_tokens"]}
-    ])
-    sns.barplot(data=tok_df, x="Model", y="Mean Thinking Tokens", ax=axes[1], palette="mako")
-    axes[1].set_title("Mean Thinking Tokens per Problem", fontsize=12, fontweight="bold")
-    axes[1].set_ylabel("Tokens")
-    for p in axes[1].patches:
-        if p.get_height() > 0:
-            axes[1].annotate(f"{p.get_height():.1f}", (p.get_x() + p.get_width() / 2., p.get_height()), ha='center', va='bottom', fontsize=10)
+latest_adapter = os.path.join(ADAPTER_OUTPUT_DIR, "deepseek-r1-7b/20260804_040058/final_adapters")
+if os.path.exists(latest_adapter):
+    print("\\nEvaluating SFT Fine-Tuned Model...")
+    ft_model = PeftModel.from_pretrained(model, latest_adapter)
+    ft_summary = run_gsm8k_eval(ft_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True)"""
+    )
 
-    # 3. Inference Latency
-    lat_df = pd.DataFrame([
-        {"Model": "Baseline", "Mean Latency (s)": base_eval_results["mean_latency"]},
-        {"Model": "Fine-Tuned", "Mean Latency (s)": ft_eval_results["mean_latency"]}
-    ])
-    sns.barplot(data=lat_df, x="Model", y="Mean Latency (s)", ax=axes[2], palette="rocket")
-    axes[2].set_title("Mean Inference Latency (Seconds)", fontsize=12, fontweight="bold")
-    axes[2].set_ylabel("Seconds")
-    for p in axes[2].patches:
-        if p.get_height() > 0:
-            axes[2].annotate(f"{p.get_height():.2f}s", (p.get_x() + p.get_width() / 2., p.get_height()), ha='center', va='bottom', fontsize=10)
+    add_md("## 7. Qualitative Reasoning Trace Inspection")
+    add_code(
+        """import json
+
+b_file = "results/deepseek-r1-7b/baseline/gsm8k.json"
+f_file = "results/deepseek-r1-7b/finetuned/gsm8k.json"
+
+if os.path.exists(b_file) and os.path.exists(f_file):
+    with open(b_file) as f:
+        b_data = json.load(f)["results"]
+    with open(f_file) as f:
+        f_data = json.load(f)["results"]
+
+    print("=======================================================")
+    print("🔍 BEFORE vs AFTER SFT REASONING COMPARISON")
+    print("=======================================================")
+    for i in range(min(3, len(b_data))):
+        b_item, f_item = b_data[i], f_data[i]
+        print(f"\\n--- Sample {i+1} ---")
+        print("Question:", b_item["question"])
+        print(f"[BASE] Think: {b_item['thinking_tokens']} tok | Answer: {b_item['answer_tokens']} tok")
+        print("Thinking:", b_item["thinking_content"])
+        print(f"[SFT] Think: {f_item['thinking_tokens']} tok | Answer: {f_item['answer_tokens']} tok")
+        print("Thinking:", f_item["thinking_content"])
+        print("Answer:", f_item["answer_content"])
+        print("-" * 55)"""
+    )
+
+    add_md("## 8. Comparative Performance Dashboard")
+    add_code(
+        """import matplotlib.pyplot as plt
+import numpy as np
+
+def get_summary(p):
+    if not os.path.exists(p): return None
+    with open(p) as f: return json.load(f).get("summary")
+
+b_s = get_summary(b_file)
+f_s = get_summary(f_file)
+
+if b_s and f_s:
+    plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    cats = ["7B Base", "7B Fine-Tuned"]
+    colors = ["#4A90E2", "#50E3C2"]
+
+    # Accuracy
+    accs = [b_s["accuracy"] * 100, f_s["accuracy"] * 100]
+    bars1 = ax1.bar(cats, accs, color=colors, width=0.45)
+    ax1.set_title("GSM8K Accuracy (%)", fontsize=12, fontweight="bold", pad=15)
+    ax1.set_ylabel("Accuracy (%)", fontsize=11)
+    ax1.set_ylim(0, 100)
+    ax1.grid(True, axis="y", linestyle=":", alpha=0.6)
+    for bar in bars1:
+        h = bar.get_height()
+        ax1.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width()/2, h), xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontweight="bold")
+
+    # Tokens
+    think_t = [b_s["mean_thinking_tokens"], f_s["mean_thinking_tokens"]]
+    ans_t = [b_s["mean_answer_tokens"], f_s["mean_answer_tokens"]]
+    ax2.bar(cats, think_t, label="Thinking Tokens", color="#4A90E2", width=0.45)
+    ax2.bar(cats, ans_t, bottom=think_t, label="Answer Tokens", color="#B8E986", width=0.45)
+    ax2.set_title("Token Count Breakdown", fontsize=12, fontweight="bold", pad=15)
+    ax2.set_ylabel("Average Tokens", fontsize=11)
+    ax2.set_ylim(0, 320)
+    ax2.legend(loc="upper right")
+    ax2.grid(True, axis="y", linestyle=":", alpha=0.6)
+    for idx, (t, a) in enumerate(zip(think_t, ans_t)):
+        tot = t + a
+        ax2.annotate(f"Total: {int(tot)}", xy=(idx, tot), xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontweight="bold")
 
     plt.tight_layout()
-    plot_save_path = os.path.join(ADAPTER_OUTPUT_DIR, "eda_comparison_dashboard.png")
-    plt.savefig(plot_save_path, dpi=150, bbox_inches="tight")
-    print(f"Saved dashboard plot to: {plot_save_path}")
-    plt.show()""")
+    plot_p = os.path.join(ADAPTER_OUTPUT_DIR, "eda_sft_dashboard.png")
+    plt.savefig(plot_p, dpi=150, bbox_inches="tight")
+    print("Saved dashboard to:", plot_p)
+    plt.show()"""
+    )
 
-    # Section 8: Downloadable Artifacts Package
-    add_md("## 8. Export Artifacts Package for Download")
+    add_md("## 9. Export Artifacts Zip Package")
+    add_code(
+        """import zipfile
 
-    add_code("""import os
-import zipfile
-
-ZIP_FILENAME = "kaggle_grug_finetune_artifacts.zip"
-
-print(f"Creating downloadable artifacts package: {ZIP_FILENAME}...")
-
-targets_to_zip = ["adapters", "results"]
-added_count = 0
-
-with zipfile.ZipFile(ZIP_FILENAME, "w", zipfile.ZIP_DEFLATED) as zipf:
-    for target in targets_to_zip:
+ZIP_FILE = "kaggle_sft_artifacts.zip"
+print(f"Creating downloadable artifacts package: {ZIP_FILE}...")
+with zipfile.ZipFile(ZIP_FILE, "w", zipfile.ZIP_DEFLATED) as zipf:
+    for target in ["adapters", "results"]:
         if os.path.exists(target):
-            if os.path.isfile(target):
-                zipf.write(target, target)
-                added_count += 1
-            elif os.path.isdir(target):
-                for root, dirs, files in os.walk(target):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, ".")
-                        zipf.write(file_path, arcname)
-                        added_count += 1
-                        print(f"  Added: {arcname}")
+            for root, dirs, files in os.walk(target):
+                for file in files:
+                    fp = os.path.join(root, file)
+                    zipf.write(fp, os.path.relpath(fp, "."))
 
-if os.path.exists(ZIP_FILENAME):
-    size_mb = os.path.getsize(ZIP_FILENAME) / (1024 * 1024)
-    print(f"\\n✅ Successfully packaged {added_count} artifact files into '{ZIP_FILENAME}' ({size_mb:.2f} MB)")
-    print("Download 'kaggle_grug_finetune_artifacts.zip' directly from the Kaggle Output Files sidebar!")
+if os.path.exists(ZIP_FILE):
+    size_mb = os.path.getsize(ZIP_FILE) / (1024 * 1024)
+    print(f"\\n✅ Packaged artifacts into '{ZIP_FILE}' ({size_mb:.2f} MB)")"""
+    )
+
+    save_notebook(cells, "kaggle_sft_pipeline.ipynb")
+
+
+# ==============================================================================
+# NOTEBOOK 2: DPO PREFERENCE OPTIMIZATION PIPELINE
+# ==============================================================================
+def generate_dpo_notebook():
+    cells, add_md, add_code = create_cell_helpers()
+
+    # Top Standalone Overview Cell
+    add_md(
+        """# Direct Preference Optimization (DPO) Pipeline (DeepSeek-R1-7B)
+
+## 🎯 What Are We Doing?
+We are running Direct Preference Optimization (DPO) on top of the SFT-aligned `DeepSeek-R1-Distill-Qwen-7B` model using preference pairs (`chosen` vs `rejected`), followed by benchmark evaluation and artifact export.
+
+## 💡 Why Are We Doing It?
+While SFT teaches formatting and telegraphic syntax, DPO directly optimizes the model's preference margin to reward concise, accurate reasoning (`chosen`) over verbose or error-prone derivations (`rejected`), ensuring maximum brevity without sacrificing math precision.
+
+## 🛠️ Code Source & Infrastructure
+- **GitHub Repository:** [Hari31416/qwen-grug-finetune](https://github.com/Hari31416/qwen-grug-finetune.git)
+- **Frameworks Used:** PyTorch, Hugging Face `transformers`, `peft` (LoRA), `trl` (`DPOTrainer`), `bitsandbytes` (4-bit NF4 quantization).
+- **Target Hardware:** 2x NVIDIA T4 GPUs (Kaggle / Google Colab CUDA environment).
+
+## 📊 Data Source
+- **Hugging Face Dataset Repository:** [hari31416/qwen-grug-finetune](https://huggingface.co/datasets/hari31416/qwen-grug-finetune) (Preference dataset splits containing JSONL rows with `prompt`, `chosen`, and `rejected`).
+- **Evaluation Benchmark:** [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) (Grade School Math reasoning test split).
+
+---
+
+### Notebook Execution Workflow:
+1. **DPO Hyperparameters**: Set preference optimization learning rate (`5e-7`), KL penalty (`beta=0.1`), and batch sizes.
+2. **Environment & Dataset Setup**: Clone repository, load preference data (`data/dpo/train.jsonl`).
+3. **Load SFT Reference Model**: Load 4-bit base model and apply baseline SFT LoRA weights.
+4. **Execute DPO Training**: Run `run_dpo_training()` using Hugging Face TRL `DPOTrainer`.
+5. **DPO GSM8K Evaluation**: Benchmark DPO model vs. Base and SFT models.
+6. **Qualitative Preference Inspection**: Inspect how DPO further refines telegraphic brevity and accuracy.
+7. **Export DPO Package**: Package DPO adapters into a downloadable ZIP archive."""
+    )
+
+    add_md("## 1. Centralized DPO Hyperparameters & Configuration")
+    add_code(
+        """# ==========================================
+# ⚙️ DPO EXPERIMENTAL HYPERPARAMETERS & CONFIG
+# ==========================================
+
+REPO_URL = "https://github.com/Hari31416/qwen-grug-finetune.git"
+REPO_NAME = "qwen-grug-finetune"
+MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+SFT_ADAPTER_PATH = "adapters/deepseek-r1-7b/20260804_040058/final_adapters"
+DPO_DATA_DIR = "data/dpo"
+DPO_OUTPUT_DIR = "adapters/deepseek-r1-7b/dpo"
+
+# DPO Training Hyperparameters
+DPO_EPOCHS = 1             # 1-2 epochs for preference optimization
+DPO_BATCH_SIZE = 1         # Per-device batch size
+DPO_GRAD_ACCUM = 8         # Gradient accumulation steps
+DPO_LEARNING_RATE = 5e-7   # Learning rate (100x smaller than SFT)
+DPO_BETA = 0.1             # KL divergence penalty weight
+MAX_LENGTH = 1536          # Maximum sequence length
+MAX_PROMPT_LENGTH = 512    # Maximum prompt length
+
+EVAL_LIMIT = None         # Set to None for FULL benchmark evaluation (all 1,000 test samples), or set e.g. 50 for quick debugging
+EVAL_BATCH_SIZE = 1        # Evaluation batch size"""
+    )
+
+    add_md("## 2. Environment Setup & Preference Data Verification")
+    add_code(
+        """import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas pyyaml"""
+    )
+
+    add_code(
+        """import sys
+if not os.path.exists("scripts") and not os.path.exists(f"{REPO_NAME}/scripts"):
+    print(f"Cloning {REPO_URL} into workspace...")
+    !git clone {REPO_URL}
+    if os.path.exists(REPO_NAME):
+        %cd {REPO_NAME}
+elif os.path.exists(REPO_NAME) and os.path.exists(f"{REPO_NAME}/scripts"):
+    %cd {REPO_NAME}
+
+sys.path.append(".")
+from scripts.cuda.cuda_utils import patch_transformers_lazy_imports
+patch_transformers_lazy_imports()
+
+train_file = os.path.join(DPO_DATA_DIR, "train.jsonl")
+if os.path.exists(train_file):
+    print(f"✅ Found DPO dataset: {train_file}")
 else:
-    print("❌ Failed to create zip package.")""")
+    print(f"⚠️ DPO dataset missing at '{train_file}'. Please place 'train.jsonl' in '{DPO_DATA_DIR}'.")"""
+    )
 
-    nb = {
-        "cells": cells,
-        "metadata": {
-            "language_info": {
-                "name": "python"
-            }
-        },
-        "nbformat": 4,
-        "nbformat_minor": 2
-    }
+    add_md("## 3. Execute DPO Fine-Tuning (`DPOTrainer`)")
+    add_code(
+        """from scripts.cuda.dpo_cuda import run_dpo_training
 
-    os.makedirs("notebooks", exist_ok=True)
-    out_path = "notebooks/kaggle_grug_finetune.ipynb"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(nb, f, indent=2)
-    print(f"Successfully generated notebook with zip exporter at: {out_path}")
+print("Starting DPO Fine-Tuning...")
+dpo_trainer = run_dpo_training(
+    model_arg=MODEL_ID,
+    adapter_path=SFT_ADAPTER_PATH,
+    dpo_data_dir=DPO_DATA_DIR,
+    output_dir=DPO_OUTPUT_DIR,
+    epochs=DPO_EPOCHS,
+    batch_size=DPO_BATCH_SIZE,
+    grad_accum=DPO_GRAD_ACCUM,
+    learning_rate=DPO_LEARNING_RATE,
+    beta=DPO_BETA,
+    max_length=MAX_LENGTH,
+    max_prompt_length=MAX_PROMPT_LENGTH,
+)"""
+    )
+
+    add_md("## 4. Benchmark Evaluation on DPO Model")
+    add_code(
+        """import torch
+from scripts.cuda.cuda_utils import load_causal_lm_model, load_causal_lm_tokenizer
+from scripts.cuda.eval_cuda import run_gsm8k_eval
+from peft import PeftModel
+
+tokenizer = load_causal_lm_tokenizer(MODEL_ID)
+model = load_causal_lm_model(MODEL_ID, device_map="auto", torch_dtype=torch.float16)
+
+dpo_adapter_path = os.path.join(DPO_OUTPUT_DIR, "final_dpo_adapters")
+if os.path.exists(dpo_adapter_path):
+    print("Evaluating DPO Model on GSM8K Benchmark...")
+    dpo_model = PeftModel.from_pretrained(model, dpo_adapter_path)
+    dpo_summary = run_gsm8k_eval(dpo_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True)
+else:
+    print(f"DPO adapter path '{dpo_adapter_path}' not found.")"""
+    )
+
+    add_md("## 5. Export DPO Artifacts Package")
+    add_code(
+        """import zipfile
+
+ZIP_FILE = "kaggle_dpo_artifacts.zip"
+print(f"Creating downloadable DPO artifacts package: {ZIP_FILE}...")
+with zipfile.ZipFile(ZIP_FILE, "w", zipfile.ZIP_DEFLATED) as zipf:
+    if os.path.exists(DPO_OUTPUT_DIR):
+        for root, dirs, files in os.walk(DPO_OUTPUT_DIR):
+            for file in files:
+                fp = os.path.join(root, file)
+                zipf.write(fp, os.path.relpath(fp, "."))
+
+if os.path.exists(ZIP_FILE):
+    size_mb = os.path.getsize(ZIP_FILE) / (1024 * 1024)
+    print(f"\\n✅ Packaged DPO artifacts into '{ZIP_FILE}' ({size_mb:.2f} MB)")"""
+    )
+
+    save_notebook(cells, "kaggle_dpo_pipeline.ipynb")
+
 
 if __name__ == "__main__":
-    create_notebook()
+    generate_sft_notebook()
+    generate_dpo_notebook()

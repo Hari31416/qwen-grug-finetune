@@ -14,14 +14,16 @@ Unlike Apple Silicon scripts which use `mlx_lm`, these scripts utilize `torch`, 
 
 ---
 
-## Interactive Jupyter Notebook Workflow (Recommended)
+## Interactive Jupyter Notebook Workflows (Recommended)
 
-An interactive notebook **[notebooks/kaggle_grug_finetune.ipynb](../../notebooks/kaggle_grug_finetune.ipynb)** is available for execution in Kaggle or Colab without needing shell commands.
+Two interactive notebooks are available in `notebooks/` for execution in Kaggle or Colab:
+1. **[notebooks/kaggle_sft_pipeline.ipynb](../../notebooks/kaggle_sft_pipeline.ipynb)** — End-to-end Telegraphic SFT alignment & GSM8K benchmark evaluation.
+2. **[notebooks/kaggle_dpo_pipeline.ipynb](../../notebooks/kaggle_dpo_pipeline.ipynb)** — Direct Preference Optimization (DPO) preference fine-tuning.
 
 ### 1. Open Notebook in Kaggle / Colab
 
 1. **Kaggle**: Select Accelerator **GPU T4 x2** and turn Internet **On**.
-2. Open `notebooks/kaggle_grug_finetune.ipynb`.
+2. Open `notebooks/kaggle_sft_pipeline.ipynb` or `notebooks/kaggle_dpo_pipeline.ipynb`.
 
 ### 2. Centralized Experimental Parameters (Top Cell)
 
