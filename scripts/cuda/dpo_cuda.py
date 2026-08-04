@@ -137,54 +137,47 @@ def run_dpo_training(
         )
 
     # 4. Define DPO Training Arguments
+    import inspect
+
+    # 4. Define DPO Training Arguments
+    raw_cfg_dict = {
+        "output_dir": final_output_dir,
+        "num_train_epochs": epochs,
+        "per_device_train_batch_size": batch_size,
+        "per_device_eval_batch_size": batch_size,
+        "gradient_accumulation_steps": grad_accum,
+        "learning_rate": learning_rate,
+        "lr_scheduler_type": "cosine",
+        "warmup_ratio": 0.1,
+        "logging_steps": 5,
+        "save_strategy": "steps",
+        "save_steps": 20,
+        "eval_strategy": "steps" if eval_dataset else "no",
+        "eval_steps": 20 if eval_dataset else None,
+        "fp16": is_cuda,
+        "optim": "adamw_torch",
+        "remove_unused_columns": False,
+        "report_to": "none",
+        "beta": beta,
+        "max_length": max_length,
+        "max_prompt_length": max_prompt_length,
+    }
+
     is_dpo_config = False
     try:
         from trl import DPOConfig
-        training_args = DPOConfig(
-            output_dir=final_output_dir,
-            num_train_epochs=epochs,
-            per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=batch_size,
-            gradient_accumulation_steps=grad_accum,
-            learning_rate=learning_rate,
-            lr_scheduler_type="cosine",
-            warmup_ratio=0.1,
-            logging_steps=5,
-            save_strategy="steps",
-            save_steps=20,
-            eval_strategy="steps" if eval_dataset else "no",
-            eval_steps=20 if eval_dataset else None,
-            fp16=is_cuda,
-            optim="adamw_torch",
-            remove_unused_columns=False,
-            report_to="none",
-            beta=beta,
-            max_length=max_length,
-            max_prompt_length=max_prompt_length,
-        )
+        sig_cfg = inspect.signature(DPOConfig.__init__)
+        param_cfg = set(sig_cfg.parameters.keys())
+        filtered_cfg_dict = {k: v for k, v in raw_cfg_dict.items() if k in param_cfg}
+        training_args = DPOConfig(**filtered_cfg_dict)
         is_dpo_config = True
         logger.info("Using TRL DPOConfig for training setup.")
     except Exception as cfg_err:
         logger.info("Using standard TrainingArguments fallback: %s", cfg_err)
-        training_args = TrainingArguments(
-            output_dir=final_output_dir,
-            num_train_epochs=epochs,
-            per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=batch_size,
-            gradient_accumulation_steps=grad_accum,
-            learning_rate=learning_rate,
-            lr_scheduler_type="cosine",
-            warmup_ratio=0.1,
-            logging_steps=5,
-            save_strategy="steps",
-            save_steps=20,
-            eval_strategy="steps" if eval_dataset else "no",
-            eval_steps=20 if eval_dataset else None,
-            fp16=is_cuda,
-            optim="adamw_torch",
-            remove_unused_columns=False,
-            report_to="none",
-        )
+        sig_cfg = inspect.signature(TrainingArguments.__init__)
+        param_cfg = set(sig_cfg.parameters.keys())
+        filtered_cfg_dict = {k: v for k, v in raw_cfg_dict.items() if k in param_cfg}
+        training_args = TrainingArguments(**filtered_cfg_dict)
 
     # 5. Initialize DPOTrainer
     logger.info("Initializing DPOTrainer (beta=%.3f, lr=%.2e)...", beta, learning_rate)
