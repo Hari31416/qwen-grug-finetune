@@ -386,13 +386,22 @@ elif os.path.exists(REPO_NAME) and os.path.exists(f"{REPO_NAME}/scripts"):
 
 sys.path.append(".")
 from scripts.cuda.cuda_utils import patch_transformers_lazy_imports
+from scripts.cuda.download_data import download_hf_data
+from scripts.create_dpo_dataset import generate_dpo_dataset
+
 patch_transformers_lazy_imports()
 
+# 1. Download base dataset from Hugging Face repository
+print("Downloading dataset files from Hugging Face (hari31416/qwen-grug-finetune)...")
+download_hf_data(output_dir="data")
+
+# 2. Check and auto-generate DPO dataset from downloaded SFT data if missing
 train_file = os.path.join(DPO_DATA_DIR, "train.jsonl")
-if os.path.exists(train_file):
-    print(f"✅ Found DPO dataset: {train_file}")
+if not os.path.exists(train_file):
+    print(f"Generating DPO dataset at '{DPO_DATA_DIR}' from downloaded SFT format data...")
+    generate_dpo_dataset(data_dir="data", dpo_dir=DPO_DATA_DIR)
 else:
-    print(f"⚠️ DPO dataset missing at '{train_file}'. Please place 'train.jsonl' in '{DPO_DATA_DIR}'.")"""
+    print(f"✅ Found existing DPO dataset: {train_file}")"""
     )
 
     add_md("## 3. Execute DPO Fine-Tuning (`DPOTrainer`)")

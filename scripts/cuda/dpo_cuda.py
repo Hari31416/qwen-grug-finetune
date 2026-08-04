@@ -83,14 +83,17 @@ def run_dpo_training(
     num_gpus = torch.cuda.device_count() if is_cuda else 0
     logger.info("Target Device: CUDA (%d GPUs)" if is_cuda else "Target Device: CPU/MPS", num_gpus)
 
-    # 1. Check for DPO datasets
+    # 1. Check for DPO datasets (or auto-generate from available SFT dataset)
     train_file = os.path.join(dpo_data_dir, "train.jsonl")
     valid_file = os.path.join(dpo_data_dir, "valid.jsonl")
 
     if not os.path.exists(train_file):
-        logger.error("DPO training dataset not found at %s", train_file)
-        logger.info("Dataset must contain JSONL rows with: 'prompt', 'chosen', and 'rejected'")
-        sys.exit(1)
+        logger.info("DPO dataset not found at %s. Attempting to auto-generate from downloaded SFT data...", train_file)
+        from scripts.create_dpo_dataset import generate_dpo_dataset
+        success = generate_dpo_dataset(data_dir=config.data_dir, dpo_dir=dpo_data_dir)
+        if not success or not os.path.exists(train_file):
+            logger.error("Failed to generate DPO dataset at %s", train_file)
+            sys.exit(1)
 
     # Load datasets
     train_dataset = load_dataset("json", data_files=train_file, split="train")
