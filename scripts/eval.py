@@ -23,7 +23,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("eval")
 
-from mlx_lm import stream_generate, batch_generate
 from datasets import load_dataset
 
 
@@ -217,6 +216,8 @@ def main() -> None:
         prompt_tokens = [tokenizer.encode(p) for p in formatted_prompts]
 
         logger.info("Running batch generation (batch_size=%d)...", args.batch_size)
+        from mlx_lm import batch_generate
+
         start_time = time.perf_counter()
         batch_response = batch_generate(
             model,
@@ -312,6 +313,8 @@ def main() -> None:
             last_response = None
 
             try:
+                from mlx_lm import stream_generate
+
                 for response in stream_generate(
                     model,
                     tokenizer,

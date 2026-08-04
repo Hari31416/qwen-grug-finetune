@@ -1,13 +1,13 @@
 import logging
 from typing import Tuple, Any, List, Optional
-from mlx_lm import load
-from mlx_lm.sample_utils import make_sampler, make_logits_processors
 
 logger = logging.getLogger("generation_utils")
 
 
 def load_model_and_tokenizer(model_path: str, adapter_path: Optional[str] = None) -> Tuple[Any, Any]:
     """Loads the model and tokenizer from the specified path, optionally with an adapter."""
+    from mlx_lm import load
+
     logger.info("Loading model and tokenizer from: %s", model_path)
     if adapter_path:
         logger.info("Using adapter path: %s", adapter_path)
@@ -24,6 +24,8 @@ def get_generation_parameters(
 
     If repetition_penalty is 1.0 or presence_penalty is 0.0, they will be disabled.
     """
+    from mlx_lm.sample_utils import make_sampler, make_logits_processors
+
     sampler = make_sampler(temp=temp, top_p=top_p)
     logits_processors = make_logits_processors(
         repetition_penalty=repetition_penalty if repetition_penalty != 1.0 else None,
