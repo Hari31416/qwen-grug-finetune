@@ -138,8 +138,12 @@ def run_dpo_training(
 
     # 4. Define DPO Training Arguments
     import inspect
+    import datetime
 
-    # 4. Define DPO Training Arguments
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    final_output_dir = os.path.join(output_dir, timestamp)
+    os.makedirs(final_output_dir, exist_ok=True)
+
     raw_cfg_dict = {
         "output_dir": final_output_dir,
         "num_train_epochs": epochs,
