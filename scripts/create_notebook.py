@@ -33,7 +33,8 @@ This notebook performs end-to-end 4-bit QLoRA fine-tuning, inference, evaluation
 4. **QLoRA Fine-Tuning**: Execute `run_sft_training()` directly in notebook kernel.
 5. **Loss Visualization**: Plot Loss Curves and Learning Rate schedule using `plot_latest_training_loss()`.
 6. **GSM8K Benchmarking**: Benchmark Base Model vs. Fine-Tuned Model using `run_gsm8k_eval()`.
-7. **EDA Dashboard**: Plot comparative metrics for Accuracy, Format Compliance, Reasoning Tokens, and Latency.""")
+7. **EDA Dashboard**: Plot comparative metrics for Accuracy, Format Compliance, Reasoning Tokens, and Latency.
+8. **Export Artifacts Package**: Zip trained adapters, evaluation JSONs, and plot images into a single downloadable ZIP file.""")
 
     # Section 1: Hyperparameters
     add_md("## 1. Centralized Hyperparameters & Configuration")
@@ -283,6 +284,41 @@ if base_eval_results and ft_eval_results:
     print(f"Saved dashboard plot to: {plot_save_path}")
     plt.show()""")
 
+    # Section 8: Downloadable Artifacts Package
+    add_md("## 8. Export Artifacts Package for Download")
+
+    add_code("""import os
+import zipfile
+
+ZIP_FILENAME = "kaggle_grug_finetune_artifacts.zip"
+
+print(f"Creating downloadable artifacts package: {ZIP_FILENAME}...")
+
+targets_to_zip = ["adapters", "results"]
+added_count = 0
+
+with zipfile.ZipFile(ZIP_FILENAME, "w", zipfile.ZIP_DEFLATED) as zipf:
+    for target in targets_to_zip:
+        if os.path.exists(target):
+            if os.path.isfile(target):
+                zipf.write(target, target)
+                added_count += 1
+            elif os.path.isdir(target):
+                for root, dirs, files in os.walk(target):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, ".")
+                        zipf.write(file_path, arcname)
+                        added_count += 1
+                        print(f"  Added: {arcname}")
+
+if os.path.exists(ZIP_FILENAME):
+    size_mb = os.path.getsize(ZIP_FILENAME) / (1024 * 1024)
+    print(f"\\n✅ Successfully packaged {added_count} artifact files into '{ZIP_FILENAME}' ({size_mb:.2f} MB)")
+    print("Download 'kaggle_grug_finetune_artifacts.zip' directly from the Kaggle Output Files sidebar!")
+else:
+    print("❌ Failed to create zip package.")""")
+
     nb = {
         "cells": cells,
         "metadata": {
@@ -298,7 +334,7 @@ if base_eval_results and ft_eval_results:
     out_path = "notebooks/kaggle_grug_finetune.ipynb"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=2)
-    print(f"Successfully generated notebook with TRAIN_BATCH_SIZE=1 & ClearCacheCallback at: {out_path}")
+    print(f"Successfully generated notebook with zip exporter at: {out_path}")
 
 if __name__ == "__main__":
     create_notebook()
