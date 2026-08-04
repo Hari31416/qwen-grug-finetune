@@ -66,26 +66,9 @@ def generate_dpo_dataset(
     os.makedirs(dpo_dir, exist_ok=True)
 
     if not os.path.exists(sft_train_path):
-        logger.warning("SFT data file '%s' not found. Generating fallback synthetic DPO dataset...", sft_train_path)
-        fallback_records = [
-            {
-                "prompt": "<|im_start|>system\nWrite your reasoning in a concise, telegraphic style inside the thinking block.<|im_end|>\n<|im_start|>user\nCould a two-year old win a Scrabble tournament?\nAnswer in exactly one word: yes or no.<|im_end|>\n<|im_start|>assistant\n",
-                "chosen": "<think>\nScrabble: form words, score points, highest score wins. Two-year-old lacks vocabulary, strategic thinking, optimal game analysis, rule adherence. Random letter placement -> extremely unlikely win.\n</think>\n\nNo",
-                "rejected": "<think>\nFirst, let us carefully break down the question step-by-step. Scrabble requires complex vocabulary, letter positioning, strategic board manipulation, and word length optimization. A two-year-old child cannot read fluently or analyze strategic point maximization. Therefore, after analyzing all details, a two-year-old will lose.\n</think>\n\nFinal Answer: No"
-            },
-            {
-                "prompt": "<|im_start|>system\nWrite your reasoning in a concise, telegraphic style inside the thinking block.<|im_end|>\n<|im_start|>user\nJosh buys a house for $80,000 and puts in $50,000 in repairs. This increased the value of the house by 150%. How much profit did he make?<|im_end|>\n<|im_start|>assistant\n",
-                "chosen": "<think>\nJosh buys house for $80k. Repairs: $50k. Total cost: $130k. 150% increase: 1.5 * $80k = $120k. New value: $80k + $120k = $200k. Profit: $200k - $130k = $70k.\n</think>\n\nJosh made a profit of \\boxed{70000}.",
-                "rejected": "<think>\nFirst, I will calculate the cost of the house. Josh buys the house for $80,000. Next, he spends $50,000 on repairs, making the total cost $130,000. Then, the repairs increase the house's value by 150%. To find the new value, multiply $80,000 by 1.5 which equals $120,000. Profit is $120,000 - $130,000 = -$10,000.\n</think>\n\nJosh made a profit of \\boxed{-10000}."
-            }
-        ]
-        with open(train_dpo_path, "w", encoding="utf-8") as f:
-            for rec in fallback_records:
-                f.write(json.dumps(rec) + "\n")
-        logger.info("Generated fallback DPO dataset: %s", train_dpo_path)
-        return True
+        logger.error("Required SFT dataset file '%s' not found. Cannot generate DPO dataset.", sft_train_path)
+        return False
 
-    os.makedirs(dpo_dir, exist_ok=True)
     logger.info("Generating DPO dataset from available SFT format data ('%s')...", sft_train_path)
 
     # Process train dataset split
