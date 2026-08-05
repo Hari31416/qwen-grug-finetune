@@ -155,6 +155,7 @@ def run_gsm8k_eval(
     no_system_prompt: bool = False,
     split: str = "test",
     is_adapter: bool = False,
+    output_subfolder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Runs GSM8K evaluation on a given model and tokenizer and returns summary metrics."""
     import torch
@@ -164,6 +165,12 @@ def run_gsm8k_eval(
     device = (
         "cuda" if is_cuda else ("mps" if torch.backends.mps.is_available() else "cpu")
     )
+    if is_cuda:
+        try:
+            model.to("cuda")
+        except Exception:
+            pass
+
     model.eval()
 
     logger.info("Loading Benchmark Dataset: gsm8k (split='%s')...", split)
@@ -276,7 +283,7 @@ def run_gsm8k_eval(
             format_compliant_count
         ) = 0
 
-    subfolder = "finetuned" if is_adapter else "baseline"
+    subfolder = output_subfolder if output_subfolder else ("finetuned" if is_adapter else "baseline")
     output_dir = os.path.join(config.results, subfolder)
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "gsm8k.json")

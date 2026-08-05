@@ -109,7 +109,7 @@ EVAL_MAX_TOKENS = 1024     # Max generation tokens per GSM8K problem"""
         """import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas pyyaml"""
+%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas pyyaml 'torchao>=0.16.0'"""
     )
 
     add_code(
@@ -190,8 +190,14 @@ plot_latest_training_loss()"""
 
     add_md("## 6. GSM8K Benchmark Evaluation (Base vs. SFT)")
     add_code(
-        """from scripts.cuda.eval_cuda import run_gsm8k_eval
+        """import gc
+import torch
+from scripts.cuda.eval_cuda import run_gsm8k_eval
 from peft import PeftModel
+
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
 
 print("Evaluating Base Model...")
 base_summary = run_gsm8k_eval(model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE)
@@ -200,6 +206,11 @@ latest_adapter = os.path.join(ADAPTER_OUTPUT_DIR, "deepseek-r1-7b/20260804_04005
 if os.path.exists(latest_adapter):
     print("\\nEvaluating SFT Fine-Tuned Model...")
     ft_model = PeftModel.from_pretrained(model, latest_adapter)
+    if torch.cuda.is_available():
+        try:
+            ft_model = ft_model.to("cuda")
+        except Exception:
+            pass
     ft_summary = run_gsm8k_eval(ft_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True)"""
     )
 
@@ -314,7 +325,7 @@ def generate_dpo_notebook():
         """# Direct Preference Optimization (DPO) Pipeline (DeepSeek-R1-7B)
 
 ## 🎯 What Are We Doing?
-We are running Direct Preference Optimization (DPO) on top of the SFT-aligned `DeepSeek-R1-Distill-Qwen-7B` model using preference pairs (`chosen` vs `rejected`), followed by benchmark evaluation and artifact export.
+We are running Direct Preference Optimization (DPO) on top of the SFT-aligned `DeepSeek-R1-Distill-Qwen-7B` model using preference pairs (`chosen` vs `rejected`), followed by loss plotting, benchmark evaluation, qualitative sample inspection, comparative performance plotting, and artifact export.
 
 ## 💡 Why Are We Doing It?
 While SFT teaches formatting and telegraphic syntax, DPO directly optimizes the model's preference margin to reward concise, accurate reasoning (`chosen`) over verbose or error-prone derivations (`rejected`), ensuring maximum brevity without sacrificing math precision.
@@ -333,11 +344,12 @@ While SFT teaches formatting and telegraphic syntax, DPO directly optimizes the 
 ### Notebook Execution Workflow:
 1. **DPO Hyperparameters**: Set preference optimization learning rate (`5e-7`), KL penalty (`beta=0.1`), and batch sizes.
 2. **Environment & Dataset Setup**: Clone repository, load preference data (`data/dpo/train.jsonl`).
-3. **Load SFT Reference Model**: Load 4-bit base model and apply baseline SFT LoRA weights.
-4. **Execute DPO Training**: Run `run_dpo_training()` using Hugging Face TRL `DPOTrainer`.
-5. **DPO GSM8K Evaluation**: Benchmark DPO model vs. Base and SFT models.
+3. **Execute DPO Training**: Run `run_dpo_training()` using Hugging Face TRL `DPOTrainer`.
+4. **Plot Training Loss Curves**: Visualize training loss and learning rate decay using `plot_latest_training_loss()`.
+5. **DPO GSM8K Evaluation**: Benchmark DPO model on GSM8K reasoning dataset.
 6. **Qualitative Preference Inspection**: Inspect how DPO further refines telegraphic brevity and accuracy.
-7. **Export DPO Package**: Package DPO adapters into a downloadable ZIP archive."""
+7. **Comparative Performance Dashboard**: Plot comparative charts for Accuracy (%) and Token Breakdown (Base vs. SFT vs. DPO).
+8. **Export DPO Package**: Package DPO adapters and evaluation results into a downloadable ZIP archive."""
     )
 
     add_md("## 1. Centralized DPO Hyperparameters & Configuration")
@@ -371,7 +383,7 @@ EVAL_BATCH_SIZE = 1        # Evaluation batch size"""
         """import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas pyyaml"""
+%pip install -q peft trl bitsandbytes datasets accelerate huggingface_hub matplotlib seaborn pandas pyyaml 'torchao>=0.16.0'"""
     )
 
     add_code(
@@ -424,37 +436,163 @@ dpo_trainer = run_dpo_training(
 )"""
     )
 
-    add_md("## 4. Benchmark Evaluation on DPO Model")
+    add_md("## 4. Plot Training Loss Curves")
     add_code(
-        """import torch
+        """from scripts.cuda.plot_loss import plot_latest_training_loss
+
+print("Plotting DPO Training Loss & Learning Rate Schedule...")
+plot_latest_training_loss()"""
+    )
+
+    add_md("## 5. Benchmark Evaluation on DPO Model")
+    add_code(
+        """import gc
+import torch
+import glob
 from scripts.cuda.cuda_utils import load_causal_lm_model, load_causal_lm_tokenizer
 from scripts.cuda.eval_cuda import run_gsm8k_eval
 from peft import PeftModel
 
-tokenizer = load_causal_lm_tokenizer(MODEL_ID)
-model = load_causal_lm_model(MODEL_ID, device_map="auto", torch_dtype=torch.float16)
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
 
-dpo_adapter_path = os.path.join(DPO_OUTPUT_DIR, "final_dpo_adapters")
-if os.path.exists(dpo_adapter_path):
-    print("Evaluating DPO Model on GSM8K Benchmark...")
+is_cuda = torch.cuda.is_available()
+model_kwargs = {}
+if is_cuda:
+    from transformers import BitsAndBytesConfig
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=True,
+    )
+    model_kwargs["quantization_config"] = bnb_config
+    model_kwargs["device_map"] = "auto"
+    model_kwargs["torch_dtype"] = torch.float16
+
+tokenizer = load_causal_lm_tokenizer(MODEL_ID)
+model = load_causal_lm_model(MODEL_ID, **model_kwargs)
+
+dpo_matches = glob.glob(os.path.join(DPO_OUTPUT_DIR, "**/final_dpo_adapters"), recursive=True)
+if dpo_matches:
+    dpo_adapter_path = sorted(dpo_matches)[-1]
+    print(f"Evaluating DPO Model on GSM8K Benchmark from '{dpo_adapter_path}'...")
     dpo_model = PeftModel.from_pretrained(model, dpo_adapter_path)
-    dpo_summary = run_gsm8k_eval(dpo_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True)
+    if torch.cuda.is_available():
+        try:
+            dpo_model = dpo_model.to("cuda")
+        except Exception:
+            pass
+    dpo_summary = run_gsm8k_eval(dpo_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True, output_subfolder="dpo")
 else:
-    print(f"DPO adapter path '{dpo_adapter_path}' not found.")"""
+    print(f"DPO adapter path inside '{DPO_OUTPUT_DIR}' not found.")"""
     )
 
-    add_md("## 5. Export DPO Artifacts Package")
+    add_md("## 6. Qualitative Reasoning Trace Inspection")
+    add_code(
+        """import json
+
+d_file = "results/deepseek-r1-7b/dpo/gsm8k.json"
+
+if os.path.exists(d_file):
+    with open(d_file) as f:
+        d_data = json.load(f)["results"]
+
+    print("=======================================================")
+    print("🔍 DPO REASONING TRACE INSPECTION")
+    print("=======================================================")
+    for i in range(min(3, len(d_data))):
+        d_item = d_data[i]
+        print(f"\\n--- Sample {i+1} ---")
+        print("Question:", d_item["question"])
+        print(f"[DPO] Think: {d_item['thinking_tokens']} tok | Answer: {d_item['answer_tokens']} tok | Correct: {d_item['correct']}")
+        print("Thinking:", d_item["thinking_content"])
+        print("Answer:", d_item["answer_content"])
+        print("-" * 55)"""
+    )
+
+    add_md("## 7. Comparative Performance Dashboard")
+    add_code(
+        """import matplotlib.pyplot as plt
+import numpy as np
+
+def get_summary(p):
+    if not os.path.exists(p): return None
+    with open(p) as f: return json.load(f).get("summary")
+
+b_s = get_summary("results/deepseek-r1-7b/baseline/gsm8k.json")
+s_s = get_summary("results/deepseek-r1-7b/finetuned/gsm8k.json")
+d_s = get_summary("results/deepseek-r1-7b/dpo/gsm8k.json")
+
+cats, accs, think_t, ans_t, colors = [], [], [], [], []
+
+if b_s:
+    cats.append("7B Base")
+    accs.append(b_s["accuracy"] * 100)
+    think_t.append(b_s["mean_thinking_tokens"])
+    ans_t.append(b_s["mean_answer_tokens"])
+    colors.append("#4A90E2")
+
+if s_s:
+    cats.append("7B SFT")
+    accs.append(s_s["accuracy"] * 100)
+    think_t.append(s_s["mean_thinking_tokens"])
+    ans_t.append(s_s["mean_answer_tokens"])
+    colors.append("#50E3C2")
+
+if d_s:
+    cats.append("7B DPO")
+    accs.append(d_s["accuracy"] * 100)
+    think_t.append(d_s["mean_thinking_tokens"])
+    ans_t.append(d_s["mean_answer_tokens"])
+    colors.append("#F5A623")
+
+if cats:
+    plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Accuracy Chart
+    bars1 = ax1.bar(cats, accs, color=colors, width=0.45)
+    ax1.set_title("GSM8K Accuracy (%)", fontsize=12, fontweight="bold", pad=15)
+    ax1.set_ylabel("Accuracy (%)", fontsize=11)
+    ax1.set_ylim(0, 100)
+    ax1.grid(True, axis="y", linestyle=":", alpha=0.6)
+    for bar in bars1:
+        h = bar.get_height()
+        ax1.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width()/2, h), xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontweight="bold")
+
+    # Tokens Chart
+    ax2.bar(cats, think_t, label="Thinking Tokens", color="#4A90E2", width=0.45)
+    ax2.bar(cats, ans_t, bottom=think_t, label="Answer Tokens", color="#B8E986", width=0.45)
+    ax2.set_title("Token Count Breakdown", fontsize=12, fontweight="bold", pad=15)
+    ax2.set_ylabel("Average Tokens", fontsize=11)
+    ax2.legend(loc="upper right")
+    ax2.grid(True, axis="y", linestyle=":", alpha=0.6)
+    for idx, (t, a) in enumerate(zip(think_t, ans_t)):
+        tot = t + a
+        ax2.annotate(f"Total: {int(tot)}", xy=(idx, tot), xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontweight="bold")
+
+    plt.tight_layout()
+    plot_p = os.path.join(DPO_OUTPUT_DIR, "eda_dpo_dashboard.png")
+    plt.savefig(plot_p, dpi=150, bbox_inches="tight")
+    print("Saved DPO dashboard to:", plot_p)
+    plt.show()"""
+    )
+
+    add_md("## 8. Export DPO Artifacts Package")
     add_code(
         """import zipfile
 
 ZIP_FILE = "kaggle_dpo_artifacts.zip"
 print(f"Creating downloadable DPO artifacts package: {ZIP_FILE}...")
 with zipfile.ZipFile(ZIP_FILE, "w", zipfile.ZIP_DEFLATED) as zipf:
-    if os.path.exists(DPO_OUTPUT_DIR):
-        for root, dirs, files in os.walk(DPO_OUTPUT_DIR):
-            for file in files:
-                fp = os.path.join(root, file)
-                zipf.write(fp, os.path.relpath(fp, "."))
+    for target in ["adapters", "results"]:
+        if os.path.exists(target):
+            for root, dirs, files in os.walk(target):
+                for file in files:
+                    fp = os.path.join(root, file)
+                    zipf.write(fp, os.path.relpath(fp, "."))
 
 if os.path.exists(ZIP_FILE):
     size_mb = os.path.getsize(ZIP_FILE) / (1024 * 1024)

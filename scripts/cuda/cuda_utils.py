@@ -22,7 +22,7 @@ def resolve_hf_model_id(model_arg: str) -> str:
 
 
 def patch_transformers_lazy_imports() -> None:
-    """Patches broken lazy imports in transformers (e.g. BloomPreTrainedModel) in Kaggle/Colab environments."""
+    """Patches broken lazy imports and torchao version check in transformers in Kaggle/Colab environments."""
     try:
         import transformers
         for mod_name in ["BloomPreTrainedModel", "BloomForCausalLM", "BloomModel"]:
@@ -33,6 +33,23 @@ def patch_transformers_lazy_imports() -> None:
                     pass
                 setattr(transformers, mod_name, DummyBloomClass)
                 logger.debug("Patched transformers.%s with DummyClass", mod_name)
+
+        # Patch incompatible torchao version error in transformers
+        try:
+            import transformers.utils.import_utils as import_utils
+            if hasattr(import_utils, "is_torchao_available"):
+                import importlib.metadata
+                try:
+                    v = importlib.metadata.version("torchao")
+                    from packaging.version import parse
+                    if parse(v) < parse("0.16.0"):
+                        logger.info("Found old torchao version %s (< 0.16.0). Disabling torchao in transformers.", v)
+                        import_utils.is_torchao_available = lambda: False
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug("Could not patch torchao check: %s", e)
+
     except Exception as e:
         logger.warning("Could not patch transformers lazy imports: %s", e)
 
