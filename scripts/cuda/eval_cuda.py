@@ -121,7 +121,7 @@ def main() -> None:
             bnb_4bit_use_double_quant=True,
         )
         model_kwargs["quantization_config"] = bnb_config
-        model_kwargs["device_map"] = "auto"
+        model_kwargs["device_map"] = {"": 0}
         model_kwargs["torch_dtype"] = torch.float16
 
     logger.info("Loading Base Model...")
@@ -170,6 +170,10 @@ def run_gsm8k_eval(
             model.to("cuda")
         except Exception:
             pass
+
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
 
     model.eval()
 
@@ -262,7 +266,10 @@ def run_gsm8k_eval(
             }
             results.append(record)
 
-    # Compute Summary Statistics
+        if (i + len(batch_samples)) % 5 == 0 or (i + len(batch_samples)) == total_count:
+            curr_correct = sum(1 for r in results if r["correct"])
+            curr_acc = (curr_correct / len(results)) * 100 if results else 0.0
+            print(f"⏳ Evaluated {len(results)}/{total_count} samples | Current Accuracy: {curr_acc:.1f}%")
     if total_count > 0:
         correct_count = sum(1 for r in results if r["correct"])
         format_compliant_count = sum(1 for r in results if r["format_compliance"])

@@ -468,7 +468,7 @@ if is_cuda:
         bnb_4bit_use_double_quant=True,
     )
     model_kwargs["quantization_config"] = bnb_config
-    model_kwargs["device_map"] = "auto"
+    model_kwargs["device_map"] = {"": 0}
     model_kwargs["torch_dtype"] = torch.float16
 
 tokenizer = load_causal_lm_tokenizer(MODEL_ID)
@@ -479,11 +479,6 @@ if dpo_matches:
     dpo_adapter_path = sorted(dpo_matches)[-1]
     print(f"Evaluating DPO Model on GSM8K Benchmark from '{dpo_adapter_path}'...")
     dpo_model = PeftModel.from_pretrained(model, dpo_adapter_path)
-    if torch.cuda.is_available():
-        try:
-            dpo_model = dpo_model.to("cuda")
-        except Exception:
-            pass
     dpo_summary = run_gsm8k_eval(dpo_model, tokenizer, limit=EVAL_LIMIT, batch_size=EVAL_BATCH_SIZE, is_adapter=True, output_subfolder="dpo")
 else:
     print(f"DPO adapter path inside '{DPO_OUTPUT_DIR}' not found.")"""
