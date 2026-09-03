@@ -359,75 +359,113 @@ export function useWorkspace() {
     const newWorkspace = createEmptyWorkspace()
 
     try {
-      const baseUrl = `https://huggingface.co/hari31416/qwen-grug-finetune/resolve/main/${iterationId}`
+      const baseUrl = 'https://huggingface.co/datasets/hari31416/grug-reasoning-data-and-benchmarks/resolve/main'
       const filesToFetch: { url: string; path: string; parser: (content: string) => void }[] = []
 
-      // SFT data (only for iteration-1 and iteration-2-regularized)
-      if (iterationId !== "iteration-2-unregularized") {
+      if (iterationId === 'deepseek-r1-7b-full') {
+        // 7B Full Benchmark Suite (Baseline, SFT, DPO)
         filesToFetch.push({
-          url: `${baseUrl}/data/train.jsonl`,
-          path: "data/train.jsonl",
-          parser: (content) => parseSftFormattedJsonl(content, "train", newWorkspace)
+          url: `${baseUrl}/benchmarks/deepseek-r1-7b/baseline/gsm8k.json`,
+          path: 'deepseek-r1-7b/baseline/gsm8k.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-7b/baseline/gsm8k.json', newWorkspace),
         })
         filesToFetch.push({
-          url: `${baseUrl}/data/valid.jsonl`,
-          path: "data/valid.jsonl",
-          parser: (content) => parseSftFormattedJsonl(content, "valid", newWorkspace)
+          url: `${baseUrl}/benchmarks/deepseek-r1-7b/finetuned/gsm8k.json`,
+          path: 'deepseek-r1-7b/finetuned/gsm8k.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-7b/finetuned/gsm8k.json', newWorkspace),
         })
-      }
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-7b/dpo/gsm8k.json`,
+          path: 'deepseek-r1-7b/dpo/gsm8k.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-7b/dpo/gsm8k.json', newWorkspace),
+        })
 
-      // Metrics / validation Report
-      filesToFetch.push({
-        url: `${baseUrl}/model/metrics.json`,
-        path: "model/metrics.json",
-        parser: (content) => {
-          try {
-            const parsed = JSON.parse(content)
-            newWorkspace.validationReport = {
-              total_checked: parsed.train_steps ? parsed.train_steps[parsed.train_steps.length - 1] : 1000,
-              accepted: parsed.val_losses ? Math.floor(parsed.val_losses[parsed.val_losses.length - 1] * 100) : 0,
-              rejected: 0,
-              rejection_rate: 0,
-            }
-          } catch (e) {
-            console.error("Error parsing metrics.json:", e)
-          }
+        // SFT & DPO training splits
+        filesToFetch.push({
+          url: `${baseUrl}/data/7b/sft/train.jsonl`,
+          path: 'data/train.jsonl',
+          parser: (content) => parseSftFormattedJsonl(content, 'train', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/data/7b/sft/valid.jsonl`,
+          path: 'data/valid.jsonl',
+          parser: (content) => parseSftFormattedJsonl(content, 'valid', newWorkspace),
+        })
+
+        newWorkspace.validationReport = {
+          total_checked: 1319,
+          accepted: 995,
+          rejected: 324,
+          rejection_rate: 0.245,
         }
-      })
+      } else if (iterationId === 'iteration-1') {
+        // 1.5B Iteration 1 Proof of Concept
+        filesToFetch.push({
+          url: `${baseUrl}/data/1.5b/it-1/train.jsonl`,
+          path: 'data/train.jsonl',
+          parser: (content) => parseSftFormattedJsonl(content, 'train', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/data/1.5b/it-1/valid.jsonl`,
+          path: 'data/valid.jsonl',
+          parser: (content) => parseSftFormattedJsonl(content, 'valid', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-1.5b/it-1/baseline/gsm8k_normal.json`,
+          path: 'deepseek-r1-1.5b/baseline/gsm8k_normal.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-1.5b/baseline/gsm8k_normal.json', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-1.5b/it-1/finetuned/gsm8k_normal.json`,
+          path: 'deepseek-r1-1.5b/finetuned/gsm8k_normal.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-1.5b/finetuned/gsm8k_normal.json', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-1.5b/it-1/baseline/gsm8k_grug_prompt.json`,
+          path: 'deepseek-r1-1.5b/baseline/gsm8k_grug.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-1.5b/baseline/gsm8k_grug.json', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-1.5b/it-1/finetuned/gsm8k_grug_prompt.json`,
+          path: 'deepseek-r1-1.5b/finetuned/gsm8k_grug.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-1.5b/finetuned/gsm8k_grug.json', newWorkspace),
+        })
 
-      // Results
-      if (iterationId === "iteration-1") {
-        filesToFetch.push({
-          url: `${baseUrl}/report/gsm8k_normal_baseline.json`,
-          path: "deepseek-r1-1.5b/baseline/gsm8k_normal.json",
-          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/baseline/gsm8k_normal.json", newWorkspace)
-        })
-        filesToFetch.push({
-          url: `${baseUrl}/report/gsm8k_normal_finetuned.json`,
-          path: "deepseek-r1-1.5b/finetuned/gsm8k_normal.json",
-          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/finetuned/gsm8k_normal.json", newWorkspace)
-        })
-        filesToFetch.push({
-          url: `${baseUrl}/report/gsm8k_grug_baseline.json`,
-          path: "deepseek-r1-1.5b/baseline/gsm8k_grug.json",
-          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/baseline/gsm8k_grug.json", newWorkspace)
-        })
-        filesToFetch.push({
-          url: `${baseUrl}/report/gsm8k_grug_finetuned.json`,
-          path: "deepseek-r1-1.5b/finetuned/gsm8k_grug.json",
-          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/finetuned/gsm8k_grug.json", newWorkspace)
-        })
+        newWorkspace.validationReport = {
+          total_checked: 333,
+          accepted: 280,
+          rejected: 53,
+          rejection_rate: 0.159,
+        }
       } else {
+        // 1.5B Iteration 2 (Regularized / Final)
         filesToFetch.push({
-          url: `${baseUrl}/report/gsm8k_baseline.json`,
-          path: "deepseek-r1-1.5b/baseline/gsm8k.json",
-          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/baseline/gsm8k.json", newWorkspace)
+          url: `${baseUrl}/data/1.5b/it-2/train.jsonl`,
+          path: 'data/train.jsonl',
+          parser: (content) => parseSftFormattedJsonl(content, 'train', newWorkspace),
         })
         filesToFetch.push({
-          url: `${baseUrl}/report/gsm8k_finetuned.json`,
-          path: "deepseek-r1-1.5b/finetuned/gsm8k.json",
-          parser: (content) => parseResultsJson(content, "deepseek-r1-1.5b/finetuned/gsm8k.json", newWorkspace)
+          url: `${baseUrl}/data/1.5b/it-2/valid.jsonl`,
+          path: 'data/valid.jsonl',
+          parser: (content) => parseSftFormattedJsonl(content, 'valid', newWorkspace),
         })
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-1.5b/it-2/baseline/gsm8k.json`,
+          path: 'deepseek-r1-1.5b/baseline/gsm8k.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-1.5b/baseline/gsm8k.json', newWorkspace),
+        })
+        filesToFetch.push({
+          url: `${baseUrl}/benchmarks/deepseek-r1-1.5b/it-2/finetuned/gsm8k.json`,
+          path: 'deepseek-r1-1.5b/finetuned/gsm8k.json',
+          parser: (content) => parseResultsJson(content, 'deepseek-r1-1.5b/finetuned/gsm8k.json', newWorkspace),
+        })
+
+        newWorkspace.validationReport = {
+          total_checked: 1530,
+          accepted: 1400,
+          rejected: 130,
+          rejection_rate: 0.085,
+        }
       }
 
       // Fetch all files
@@ -459,10 +497,11 @@ export function useWorkspace() {
         newWorkspace.isDemo = false
         setWorkspaceData(newWorkspace)
       } else {
-        setError("Failed to load any files from Hugging Face for this iteration.")
+        setError('Failed to load any files from Hugging Face for this iteration.')
       }
-    } catch (err: any) {
-      setError(err?.message || "Failed to load from Hugging Face.")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load from Hugging Face.'
+      setError(message)
     } finally {
       setIsLoading(false)
     }

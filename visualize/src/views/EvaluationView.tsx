@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react"
 import type { WorkspaceData } from "@/types"
-import { Bar } from "react-chartjs-2"
-import { CodeBlock } from "@/components/ui/CodeBlock"
+import { Bar } from 'react-chartjs-2'
+import type { ChartData } from 'chart.js'
+import { CodeBlock } from '@/components/ui/CodeBlock'
 import { ThinkingBubble } from "@/components/ui/ThinkingBubble"
 import { Search, HelpCircle, Check, X, GitCompare, LayoutGrid } from "lucide-react"
 
@@ -17,8 +18,36 @@ export function EvaluationView({ data }: EvaluationViewProps) {
   
   // Side by side comparator state
   const [sxsQuestionId, setSxsQuestionId] = useState<number | null>(null)
-  const [sxsBenchmark, setSxsBenchmark] = useState<string>("gsm8k")
-  const [sxsPromptStyle, setSxsPromptStyle] = useState<string>("normal")
+  const [sxsBenchmark, setSxsBenchmark] = useState<string>('gsm8k')
+  const [sxsPromptStyle, setSxsPromptStyle] = useState<string>('normal')
+
+  const availableBenchmarks = useMemo(() => {
+    const set = new Set<string>()
+    Object.values(data.results).forEach((r) => {
+      if (r.metadata?.benchmark) set.add(r.metadata.benchmark)
+    })
+    return set.size > 0 ? Array.from(set) : ['gsm8k']
+  }, [data.results])
+
+  const availablePromptStyles = useMemo(() => {
+    const set = new Set<string>()
+    Object.values(data.results).forEach((r) => {
+      if (r.metadata?.promptStyle) set.add(r.metadata.promptStyle)
+    })
+    return set.size > 0 ? Array.from(set) : ['normal']
+  }, [data.results])
+
+  useEffect(() => {
+    if (!availableBenchmarks.includes(sxsBenchmark)) {
+      setSxsBenchmark(availableBenchmarks[0])
+    }
+  }, [availableBenchmarks, sxsBenchmark])
+
+  useEffect(() => {
+    if (!availablePromptStyles.includes(sxsPromptStyle)) {
+      setSxsPromptStyle(availablePromptStyles[0])
+    }
+  }, [availablePromptStyles, sxsPromptStyle])
 
   const runIds = useMemo(() => {
     return Object.keys(data.results)
@@ -135,23 +164,40 @@ export function EvaluationView({ data }: EvaluationViewProps) {
     )
   }
 
+  const has7bRuns = useMemo(() => {
+    return Object.keys(data.results).some((k) => k.startsWith('deepseek-r1-7b'))
+  }, [data.results])
+
+  const has15bRuns = useMemo(() => {
+    return Object.keys(data.results).some((k) => k.startsWith('deepseek-r1-1.5b'))
+  }, [data.results])
+
   // Grouped charts config for react-chartjs-2
   const { accChartData, tokensChartData } = useMemo(() => {
-    const runsConfig = [
-      { runType: "baseline", style: "normal", name: "Base Normal" },
-      { runType: "baseline", style: "grug_prompt", name: "Base Grug" },
-      { runType: "finetuned", style: "normal", name: "FT Normal" },
-      { runType: "finetuned", style: "grug_prompt", name: "FT Grug" },
-    ]
+    const has7b = Object.keys(data.results).some((k) => k.startsWith('deepseek-r1-7b'))
+    const modelPrefix = has7b ? 'deepseek-r1-7b' : 'deepseek-r1-1.5b'
+
+    const runsConfig = has7b
+      ? [
+        { runType: 'baseline', style: 'normal', name: 'Base 7B' },
+        { runType: 'finetuned', style: 'normal', name: 'SFT 7B' },
+        { runType: 'dpo', style: 'normal', name: 'DPO 7B' },
+      ]
+      : [
+        { runType: 'baseline', style: 'normal', name: 'Base Normal' },
+        { runType: 'baseline', style: 'grug_prompt', name: 'Base Grug' },
+        { runType: 'finetuned', style: 'normal', name: 'FT Normal' },
+        { runType: 'finetuned', style: 'grug_prompt', name: 'FT Grug' },
+      ]
 
     const labels = runsConfig.map((c) => c.name)
-    const accuracyDatasets: any[] = []
-    const tokensDatasets: any[] = []
+    const accuracyDatasets: ChartData<'bar'>['datasets'] = []
+    const tokensDatasets: ChartData<'bar'>['datasets'] = []
 
-    const benchmarks = ["gsm8k", "arc"]
+    const benchmarks = ['gsm8k']
+
     const colors: Record<string, { bg: string; border: string }> = {
-      gsm8k: { bg: "rgba(59, 130, 246, 0.5)", border: "#3b82f6" },
-      arc: { bg: "rgba(139, 92, 246, 0.5)", border: "#8b5cf6" },
+      gsm8k: { bg: 'rgba(59, 130, 246, 0.5)', border: '#3b82f6' },
     }
 
     benchmarks.forEach((bench) => {
@@ -160,7 +206,7 @@ export function EvaluationView({ data }: EvaluationViewProps) {
       let hasAny = false
 
       runsConfig.forEach((cfg) => {
-        const runId = `deepseek-r1-1.5b-${cfg.runType}-${bench}_${cfg.style}`
+        const runId = `${modelPrefix}-${cfg.runType}-${bench}_${cfg.style}`
         const run = data.results[runId]
         if (run) {
           accData.push(run.summary.accuracy * 100)
@@ -176,8 +222,8 @@ export function EvaluationView({ data }: EvaluationViewProps) {
         accuracyDatasets.push({
           label: bench.toUpperCase(),
           data: accData,
-          backgroundColor: colors[bench].bg,
-          borderColor: colors[bench].border,
+          backgroundColor: colors[bench]?.bg || 'rgba(59, 130, 246, 0.5)',
+          borderColor: colors[bench]?.border || '#3b82f6',
           borderWidth: 1.5,
           borderRadius: 4,
         })
@@ -185,8 +231,8 @@ export function EvaluationView({ data }: EvaluationViewProps) {
         tokensDatasets.push({
           label: bench.toUpperCase(),
           data: tokData,
-          backgroundColor: colors[bench].bg,
-          borderColor: colors[bench].border,
+          backgroundColor: colors[bench]?.bg || 'rgba(59, 130, 246, 0.5)',
+          borderColor: colors[bench]?.border || '#3b82f6',
           borderWidth: 1.5,
           borderRadius: 4,
         })
@@ -255,10 +301,12 @@ export function EvaluationView({ data }: EvaluationViewProps) {
     return activeRun.results.find((r) => r.id === selectedItemId) || null
   }, [activeRun, selectedItemId])
 
-  // SxS: Available question list (based on whatever gsm8k normal run is loaded)
+  // SxS: Available question list (based on whatever runs are loaded)
   const sxsQuestions = useMemo(() => {
-    const baselineKey = `deepseek-r1-1.5b-baseline-${sxsBenchmark}_${sxsPromptStyle}`
-    const baseRun = data.results[baselineKey]
+    const has7b = Object.keys(data.results).some((k) => k.startsWith('deepseek-r1-7b'))
+    const model = has7b ? 'deepseek-r1-7b' : 'deepseek-r1-1.5b'
+    const baselineKey = `${model}-baseline-${sxsBenchmark}_${sxsPromptStyle}`
+    const baseRun = data.results[baselineKey] || Object.values(data.results)[0]
     if (!baseRun) return []
     return baseRun.results.map((r) => ({ id: r.id, text: r.question }))
   }, [data.results, sxsBenchmark, sxsPromptStyle])
@@ -274,23 +322,28 @@ export function EvaluationView({ data }: EvaluationViewProps) {
     }
   }, [sxsQuestions, sxsQuestionId])
 
-  // Fetch the matched baseline & finetuned items for SxS
+  // Fetch the matched baseline, finetuned, and dpo items for SxS
   const sxsItems = useMemo(() => {
-    if (!sxsQuestionId) return { baseline: null, finetuned: null }
+    if (!sxsQuestionId) return { baseline: null, finetuned: null, dpo: null }
 
-    const model = "deepseek-r1-1.5b"
+    const has7b = Object.keys(data.results).some((k) => k.startsWith('deepseek-r1-7b'))
+    const model = has7b ? 'deepseek-r1-7b' : 'deepseek-r1-1.5b'
     const baseId = `${model}-baseline-${sxsBenchmark}_${sxsPromptStyle}`
     const ftId = `${model}-finetuned-${sxsBenchmark}_${sxsPromptStyle}`
+    const dpoId = `${model}-dpo-${sxsBenchmark}_${sxsPromptStyle}`
 
-    const baseRun = data.results[baseId]
-    const ftRun = data.results[ftId]
+    const baseRun = data.results[baseId] || data.results[`${model}-baseline-${sxsBenchmark}_normal`]
+    const ftRun = data.results[ftId] || data.results[`${model}-finetuned-${sxsBenchmark}_normal`]
+    const dpoRun = data.results[dpoId] || data.results[`${model}-dpo-${sxsBenchmark}_normal`]
 
     const baselineItem = baseRun?.results.find((r) => r.id === sxsQuestionId) || null
     const finetunedItem = ftRun?.results.find((r) => r.id === sxsQuestionId) || null
+    const dpoItem = dpoRun?.results.find((r) => r.id === sxsQuestionId) || null
 
     return {
       baseline: baselineItem,
       finetuned: finetunedItem,
+      dpo: dpoItem,
     }
   }, [data.results, sxsQuestionId, sxsBenchmark, sxsPromptStyle])
 
@@ -328,41 +381,78 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="bg-white/[0.02]">
-                    <td
-                      colSpan={8}
-                      className="p-2 text-xs font-bold text-blue-400 border-b border-white/5"
-                    >
-                      Benchmark: GSM8K (DEEPSEEK-R1-1.5B)
-                    </td>
-                  </tr>
-                  {renderTableRow(
-                    "deepseek-r1-1.5b",
-                    "gsm8k",
-                    "baseline",
-                    "normal",
-                    "Base / Normal Prompt"
-                  )}
-                  {renderTableRow(
-                    "deepseek-r1-1.5b",
-                    "gsm8k",
-                    "baseline",
-                    "grug_prompt",
-                    "Base / Grug Prompt"
-                  )}
-                  {renderTableRow(
-                    "deepseek-r1-1.5b",
-                    "gsm8k",
-                    "finetuned",
-                    "normal",
-                    "Fine-Tuned / Normal Prompt"
-                  )}
-                  {renderTableRow(
-                    "deepseek-r1-1.5b",
-                    "gsm8k",
-                    "finetuned",
-                    "grug_prompt",
-                    "Fine-Tuned / Grug Prompt"
+                    {has7bRuns && (
+                      <>
+                        <tr className="bg-white/[0.02]">
+                          <td
+                            colSpan={8}
+                            className="p-2 text-xs font-bold text-blue-400 border-b border-white/5"
+                          >
+                            Benchmark: GSM8K (DEEPSEEK-R1-7B FULL EVALUATION - 1,319 SAMPLES)
+                          </td>
+                        </tr>
+                        {renderTableRow(
+                          'deepseek-r1-7b',
+                          'gsm8k',
+                          'baseline',
+                          'normal',
+                          'Base 7B (Uncompressed CoT)'
+                        )}
+                        {renderTableRow(
+                          'deepseek-r1-7b',
+                          'gsm8k',
+                          'finetuned',
+                          'normal',
+                          'SFT 7B (Telegraphic Grug)'
+                        )}
+                        {renderTableRow(
+                          'deepseek-r1-7b',
+                          'gsm8k',
+                          'dpo',
+                          'normal',
+                          'DPO 7B (Preference-Optimized)'
+                        )}
+                      </>
+                    )}
+                    {has15bRuns && (
+                      <>
+                        <tr className="bg-white/[0.02]">
+                          <td
+                            colSpan={8}
+                            className="p-2 text-xs font-bold text-blue-400 border-b border-white/5"
+                          >
+                            Benchmark: GSM8K (DEEPSEEK-R1-1.5B)
+                          </td>
+                        </tr>
+                        {renderTableRow(
+                        'deepseek-r1-1.5b',
+                        'gsm8k',
+                        'baseline',
+                        'normal',
+                        'Base / Normal Prompt'
+                      )}
+                        {renderTableRow(
+                        'deepseek-r1-1.5b',
+                        'gsm8k',
+                        'baseline',
+                        'grug_prompt',
+                        'Base / Grug Prompt'
+                      )}
+                        {renderTableRow(
+                        'deepseek-r1-1.5b',
+                        'gsm8k',
+                        'finetuned',
+                        'normal',
+                        'Fine-Tuned / Normal Prompt'
+                      )}
+                        {renderTableRow(
+                        'deepseek-r1-1.5b',
+                        'gsm8k',
+                        'finetuned',
+                        'grug_prompt',
+                        'Fine-Tuned / Grug Prompt'
+                      )}
+                      </>
                   )}
                 </tbody>
               </table>
@@ -409,23 +499,33 @@ export function EvaluationView({ data }: EvaluationViewProps) {
 
               {/* SXS Controls */}
               <div className="flex items-center gap-2">
-                <select
-                  value={sxsBenchmark}
-                  onChange={(e) => setSxsBenchmark(e.target.value)}
-                  className="bg-white/[0.03] border border-white/5 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option value="gsm8k">GSM8K Benchmark</option>
-                  <option value="arc">ARC Benchmark</option>
-                </select>
+                {availableBenchmarks.length > 1 && (
+                  <select
+                    value={sxsBenchmark}
+                    onChange={(e) => setSxsBenchmark(e.target.value)}
+                    className="bg-white/[0.03] border border-white/5 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    {availableBenchmarks.map((b) => (
+                      <option key={b} value={b} className="bg-[#0b0f19] text-gray-100">
+                        {b.toUpperCase()} Benchmark
+                      </option>
+                    ))}
+                  </select>
+                )}
 
-                <select
-                  value={sxsPromptStyle}
-                  onChange={(e) => setSxsPromptStyle(e.target.value)}
-                  className="bg-white/[0.03] border border-white/5 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option value="normal">Normal Prompt Style</option>
-                  <option value="grug_prompt">Grug Prompt Style</option>
-                </select>
+                {availablePromptStyles.length > 1 && (
+                  <select
+                    value={sxsPromptStyle}
+                    onChange={(e) => setSxsPromptStyle(e.target.value)}
+                    className="bg-white/[0.03] border border-white/5 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    {availablePromptStyles.map((s) => (
+                      <option key={s} value={s} className="bg-[#0b0f19] text-gray-100">
+                        {s === 'normal' ? 'Normal Prompt' : 'Grug Prompt'}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -466,7 +566,7 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+                        <div className={`grid grid-cols-1 ${sxsItems.dpo ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6 mt-2`}>
                       {/* Left Column: Baseline */}
                       <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 flex flex-col gap-4">
                         <div className="flex justify-between items-center border-b border-white/5 pb-2">
@@ -477,11 +577,11 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                             <span
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
                                 sxsItems.baseline.correct
-                                  ? "bg-emerald-500/10 text-emerald-400"
-                                  : "bg-red-500/10 text-red-400"
+                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                    : 'bg-red-500/10 text-red-400'
                               }`}
                             >
-                              {sxsItems.baseline.correct ? "Correct" : "Incorrect"}
+                                  {sxsItems.baseline.correct ? 'Correct' : 'Incorrect'}
                             </span>
                           )}
                         </div>
@@ -502,25 +602,25 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                               content={
                                 sxsItems.baseline.answer_content ||
                                 sxsItems.baseline.output ||
-                                ""
+                                      ''
                               }
                             />
                             {/* Stats */}
                             <div className="grid grid-cols-3 gap-2 bg-[#070913]/30 border border-white/5 rounded-lg p-2.5 text-[11px] font-mono text-gray-400">
                               <div>
-                                Latency:{" "}
+                                      Latency:{' '}
                                 <strong className="text-gray-300">
                                   {sxsItems.baseline.latency_seconds?.toFixed(2)}s
                                 </strong>
                               </div>
                               <div>
-                                thinking:{" "}
+                                      thinking:{' '}
                                 <strong className="text-gray-300">
                                   {sxsItems.baseline.thinking_tokens} tok
                                 </strong>
                               </div>
                               <div>
-                                Speed:{" "}
+                                      Speed:{' '}
                                 <strong className="text-gray-300">
                                   {Math.round(sxsItems.baseline.tokens_per_second || 0)} t/s
                                 </strong>
@@ -530,21 +630,21 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                         )}
                       </div>
 
-                      {/* Right Column: Finetuned */}
+                          {/* Middle Column: Finetuned / SFT */}
                       <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 flex flex-col gap-4">
                         <div className="flex justify-between items-center border-b border-white/5 pb-2">
                           <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                            Fine-Tuned Output
+                                SFT Output (Telegraphic)
                           </span>
                           {sxsItems.finetuned && (
                             <span
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
                                 sxsItems.finetuned.correct
-                                  ? "bg-emerald-500/10 text-emerald-400"
-                                  : "bg-red-500/10 text-red-400"
+                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                    : 'bg-red-500/10 text-red-400'
                               }`}
                             >
-                              {sxsItems.finetuned.correct ? "Correct" : "Incorrect"}
+                                  {sxsItems.finetuned.correct ? 'Correct' : 'Incorrect'}
                             </span>
                           )}
                         </div>
@@ -565,20 +665,20 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                               content={
                                 sxsItems.finetuned.answer_content ||
                                 sxsItems.finetuned.output ||
-                                ""
+                                      ''
                               }
                             />
                             {/* Stats & Delta comparisons */}
                             {sxsItems.baseline && sxsItems.finetuned && (
                               <div className="grid grid-cols-3 gap-2 bg-[#070913]/30 border border-white/5 rounded-lg p-2.5 text-[11px] font-mono text-gray-400">
                                 <div>
-                                  Latency:{" "}
+                                        Latency:{' '}
                                   <strong className="text-gray-300">
                                     {sxsItems.finetuned.latency_seconds?.toFixed(2)}s
                                   </strong>
                                 </div>
                                 <div>
-                                  thinking:{" "}
+                                        thinking:{' '}
                                   <strong className="text-gray-300">
                                     {sxsItems.finetuned.thinking_tokens} tok
                                   </strong>
@@ -590,10 +690,10 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                                       return (
                                         <span
                                           className={`ml-1 text-[9px] font-bold ${
-                                            pct <= 0 ? "text-emerald-400" : "text-red-400"
+                                            pct <= 0 ? 'text-emerald-400' : 'text-red-400'
                                           }`}
                                         >
-                                          {pct <= 0 ? "" : "+"}
+                                          {pct <= 0 ? '' : '+'}
                                           {pct}%
                                         </span>
                                       )
@@ -602,7 +702,7 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                                   })()}
                                 </div>
                                 <div>
-                                  Speed:{" "}
+                                        Speed:{' '}
                                   <strong className="text-gray-300">
                                     {Math.round(sxsItems.finetuned.tokens_per_second || 0)} t/s
                                   </strong>
@@ -612,6 +712,81 @@ export function EvaluationView({ data }: EvaluationViewProps) {
                           </div>
                         )}
                       </div>
+
+                          {/* Right Column: DPO (if available) */}
+                          {sxsItems.dpo && (
+                            <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 flex flex-col gap-4">
+                              <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                                  DPO Output (Preference-Tuned)
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${sxsItems.dpo.correct
+                                      ? 'bg-emerald-500/10 text-emerald-400'
+                                      : 'bg-red-500/10 text-red-400'
+                                    }`}
+                                >
+                                  {sxsItems.dpo.correct ? 'Correct' : 'Incorrect'}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-col gap-3">
+                                {sxsItems.dpo.thinking_content && (
+                                  <ThinkingBubble
+                                    title="DPO thinking Process"
+                                    content={sxsItems.dpo.thinking_content}
+                                  />
+                                )}
+                                <CodeBlock
+                                  content={
+                                    sxsItems.dpo.answer_content ||
+                                    sxsItems.dpo.output ||
+                                    ''
+                                  }
+                                />
+                                {/* Stats & Delta comparisons */}
+                                {sxsItems.baseline && (
+                                  <div className="grid grid-cols-3 gap-2 bg-[#070913]/30 border border-white/5 rounded-lg p-2.5 text-[11px] font-mono text-gray-400">
+                                    <div>
+                                      Latency:{' '}
+                                      <strong className="text-gray-300">
+                                        {sxsItems.dpo.latency_seconds?.toFixed(2)}s
+                                      </strong>
+                                    </div>
+                                    <div>
+                                      thinking:{' '}
+                                      <strong className="text-gray-300">
+                                        {sxsItems.dpo.thinking_tokens} tok
+                                      </strong>
+                                      {(() => {
+                                        const baseTok = sxsItems.baseline?.thinking_tokens || 0
+                                        const dpoTok = sxsItems.dpo?.thinking_tokens || 0
+                                        if (baseTok > 0) {
+                                          const pct = Math.round(((dpoTok - baseTok) / baseTok) * 100)
+                                          return (
+                                            <span
+                                              className={`ml-1 text-[9px] font-bold ${pct <= 0 ? 'text-emerald-400' : 'text-red-400'
+                                                }`}
+                                            >
+                                              {pct <= 0 ? '' : '+'}
+                                              {pct}%
+                                            </span>
+                                          )
+                                        }
+                                        return null
+                                      })()}
+                                    </div>
+                                    <div>
+                                      Speed:{' '}
+                                      <strong className="text-gray-300">
+                                        {Math.round(sxsItems.dpo.tokens_per_second || 0)} t/s
+                                      </strong>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                     </div>
                   </div>
                 )}

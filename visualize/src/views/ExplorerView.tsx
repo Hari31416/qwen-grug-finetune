@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react"
 import type { WorkspaceData } from "@/types"
 import { Search, Info, Check, X, Circle } from "lucide-react"
-import { CodeBlock } from "@/components/ui/CodeBlock"
-import { ThinkingBubble } from "@/components/ui/ThinkingBubble"
+import { CodeBlock } from '@/components/ui/CodeBlock'
+import { ThinkingBubble } from '@/components/ui/ThinkingBubble'
+import { MarkdownMath } from '@/components/ui/MarkdownMath'
 
 interface ExplorerViewProps {
   data: WorkspaceData
@@ -363,19 +364,23 @@ export function ExplorerView({ data }: ExplorerViewProps) {
                 Stage 1: Prompt Input
               </span>
               <CodeBlock content={selectedItem.promptText} />
-              <div className="flex gap-6 text-[12px] border-t border-white/5 pt-3">
+                <div className="flex flex-col gap-3 border-t border-white/5 pt-3">
                 {selectedItem.prompt?.choices && selectedItem.prompt.choices.length > 0 && (
-                  <div>
+                    <div className="text-[12px]">
                     <span className="text-gray-500 font-medium">Choices: </span>
                     <strong className="text-gray-300">
-                      {selectedItem.prompt.choices.join(", ")}
+                        {selectedItem.prompt.choices.join(', ')}
                     </strong>
                   </div>
                 )}
                 {selectedItem.prompt?.ground_truth && (
-                  <div>
-                    <span className="text-gray-500 font-medium">Ground Truth: </span>
-                    <strong className="text-emerald-400">{selectedItem.prompt.ground_truth}</strong>
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        Ground Truth Reference
+                      </span>
+                      <div className="rounded-lg border border-white/5 bg-[#070913]/60 p-3 text-xs text-gray-200">
+                        <MarkdownMath content={selectedItem.prompt.ground_truth} />
+                      </div>
                   </div>
                 )}
               </div>
@@ -400,18 +405,18 @@ export function ExplorerView({ data }: ExplorerViewProps) {
 
                 <ThinkingBubble content={selectedItem.raw.raw_thinking} />
 
-                <div className="flex justify-between items-center text-[12px] border-t border-white/5 pt-3">
-                  <div>
-                    <span className="text-gray-500 font-medium">Model Output Answer: </span>
-                    <strong
-                      className={selectedItem.isCorrect ? "text-emerald-400" : "text-red-400"}
-                    >
-                      {selectedItem.raw.raw_answer || "N/A"}
-                    </strong>
-                  </div>
-                  <div className="text-gray-500 font-mono text-[11px]">
-                    Chars: {selectedItem.raw.raw_thinking.length} | Est. Tokens:{" "}
-                    {Math.round(selectedItem.raw.raw_thinking.length / 4)}
+                  <div className="flex flex-col gap-2.5 border-t border-white/5 pt-3">
+                    <div className="flex justify-between items-center text-[12px]">
+                      <span className="text-gray-400 font-semibold uppercase tracking-wider text-[11px]">
+                        Model Output Answer
+                      </span>
+                      <div className="text-gray-500 font-mono text-[11px]">
+                        Chars: {selectedItem.raw.raw_thinking.length} | Est. Tokens:{' '}
+                        {Math.round(selectedItem.raw.raw_thinking.length / 4)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-white/5 bg-[#070913]/60 p-3.5 text-xs text-gray-200">
+                      <MarkdownMath content={selectedItem.raw.raw_answer || 'N/A'} />
                   </div>
                 </div>
               </div>

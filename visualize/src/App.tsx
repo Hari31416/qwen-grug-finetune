@@ -1,26 +1,23 @@
-import React, { useState, useRef, useMemo } from "react"
-import { useWorkspace } from "@/hooks/useWorkspace"
-import { WelcomeBanner } from "@/components/WelcomeBanner"
-import { StatCards } from "@/components/layout/StatCards"
-import { OverviewView } from "@/views/OverviewView"
-import { ExplorerView } from "@/views/ExplorerView"
-import { AnalyticsView } from "@/views/AnalyticsView"
-import { EvaluationView } from "@/views/EvaluationView"
-import { StyleGuideView } from "@/views/StyleGuideView"
-import { Brain, FolderOpen, ChartPie, ListTodo, LineChart, Table2, BookOpen, AlertCircle, RefreshCw } from "lucide-react"
+import { useState, useMemo } from 'react'
+import { useWorkspace } from '@/hooks/useWorkspace'
+import { WelcomeBanner } from '@/components/WelcomeBanner'
+import { StatCards } from '@/components/layout/StatCards'
+import { OverviewView } from '@/views/OverviewView'
+import { ExplorerView } from '@/views/ExplorerView'
+import { AnalyticsView } from '@/views/AnalyticsView'
+import { EvaluationView } from '@/views/EvaluationView'
+import { StyleGuideView } from '@/views/StyleGuideView'
+import { Brain, ChartPie, ListTodo, LineChart, Table2, BookOpen, AlertCircle, RefreshCw } from 'lucide-react'
 
 export function App() {
   const {
     workspaceData,
     isLoading,
     error,
-    loadFromFiles,
-    loadDemo,
     loadFromHF,
   } = useWorkspace()
 
-  const [activeTab, setActiveTab] = useState<"overview" | "explorer" | "analytics" | "results" | "styleguide">("overview")
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'explorer' | 'analytics' | 'results' | 'styleguide'>('overview')
 
   const isDataLoaded = useMemo(() => {
     return (
@@ -69,26 +66,6 @@ export function App() {
 
   const validationAccepted = workspaceData.validationReport?.accepted ?? validatedCount
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      loadFromFiles(Array.from(e.target.files))
-    }
-  }
-
-  const triggerPicker = () => {
-    fileInputRef.current?.click()
-  }
-
-  // Determine header model badge
-  const modelBadge = useMemo(() => {
-    const resultsKeys = Object.keys(workspaceData.results)
-    if (resultsKeys.length > 0) {
-      const firstRun = workspaceData.results[resultsKeys[0]]
-      return firstRun?.metadata?.model || "Distill-Qwen-1.5B"
-    }
-    return "Distill-Qwen-1.5B"
-  }, [workspaceData.results])
-
   return (
     <div className="min-h-screen bg-[#0b0f19] text-gray-100 flex flex-col font-sans relative antialiased selection:bg-blue-500/30 selection:text-white">
       {/* Top Header */}
@@ -99,9 +76,6 @@ export function App() {
           </div>
           <span className="font-heading font-bold text-lg text-white tracking-tight">
             Grug Reasoning
-          </span>
-          <span className="text-[10px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2 py-0.5 rounded uppercase tracking-wider">
-            {modelBadge}
           </span>
           {workspaceData.isDemo && (
             <span className="text-[10px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded uppercase tracking-wider">
@@ -176,40 +150,19 @@ export function App() {
             </nav>
           )}
 
-          {/* Directory Picker */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            style={{ display: "none" }}
-            {...({
-              webkitdirectory: "",
-              directory: "",
-            } as any)}
-            multiple
-          />
-          
           {isDataLoaded && (
             <div className="flex items-center gap-2">
               <select
                 onChange={(e) => loadFromHF(e.target.value)}
                 disabled={isLoading}
-                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500 disabled:opacity-50 cursor-pointer"
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500 disabled:opacity-50 cursor-pointer"
                 defaultValue=""
               >
-                <option value="" disabled className="bg-[#0b0f19] text-gray-500">Switch HF Iteration...</option>
-                <option value="iteration-2-regularized" className="bg-[#0b0f19] text-gray-100">Iteration 2 (Regularized / Final)</option>
-                <option value="iteration-2-unregularized" className="bg-[#0b0f19] text-gray-100">Iteration 2 (Unregularized)</option>
-                <option value="iteration-1" className="bg-[#0b0f19] text-gray-100">Iteration 1 (Initial SFT)</option>
+                <option value="" disabled className="bg-[#0b0f19] text-gray-500">Switch HF Run...</option>
+                <option value="deepseek-r1-7b-full" className="bg-[#0b0f19] text-gray-100">DeepSeek-R1-7B (Baseline, SFT, DPO - 1,319)</option>
+                <option value="iteration-2-regularized" className="bg-[#0b0f19] text-gray-100">DeepSeek-R1-1.5B (Iteration 2 Regularized)</option>
+                <option value="iteration-1" className="bg-[#0b0f19] text-gray-100">DeepSeek-R1-1.5B (Iteration 1 Initial)</option>
               </select>
-              <button
-                onClick={triggerPicker}
-                disabled={isLoading}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-gray-300 hover:text-white font-medium text-xs transition-all cursor-pointer disabled:opacity-50"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                Local Folder
-              </button>
             </div>
           )}
         </div>
@@ -220,8 +173,6 @@ export function App() {
         {!isDataLoaded ? (
           <div className="my-auto">
             <WelcomeBanner
-              onFilesSelected={loadFromFiles}
-              onLoadDemo={loadDemo}
               onLoadFromHF={loadFromHF}
               isLoading={isLoading}
             />
