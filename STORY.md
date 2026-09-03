@@ -1,137 +1,109 @@
-# The Grug Reasoning Experiment: Can Small LLMs Think Like Cavemen?
+# The Grug Reasoning Experiment: Can LLMs Think Like Cavemen
 
-This document shares the complete narrative of our experiment: why it was started, the technical pipeline we built, the roadblocks we encountered, what worked, what failed, and the results we achieved.
+This document shares the complete narrative of our experiment: why it was started, the technical pipeline we built, the roadblocks we encountered, the scaling journey from 1.5B to 7B, what failed, and the empirical benchmark results we achieved.
 
 ## The Motivation: Replicating Frontier Token Efficiency
 
-The spark for this project came from an intriguing theory discussed online regarding the efficiency of frontier reasoning models (such as OpenAI's GPT-5.x variants).
+The spark for this project came from an intriguing theory regarding the efficiency of frontier reasoning models.
 
-### The "Grug Hypothesis"
-While proprietary models hide their inner monologue behind a generated summary or block it entirely, many developers hypothesized that these models do not reason in full, grammatically correct sentences internally. Instead, to optimize token generation and minimize latency, they might think in a highly compressed, telegramic "Grug" or "caveman" style—dropping articles, conjugations, politeness markers, and syntactic filler. 
+### The Grug Hypothesis
 
-By shrinking the length of the internal monologue, the model saves processing time and bandwidth while preserving the logical structure of its thoughts. 
+While proprietary models hide their inner monologue behind a generated summary or block it entirely, many developers hypothesized that frontier models do not reason in full, grammatically correct prose internally. Instead, to optimize token generation and minimize latency, they might think in a highly compressed, telegraphic "Grug" or "caveman" style—dropping articles, conjugations, politeness markers, and syntactic filler.
 
-### Why Small Models and Local Compute?
-At the same time, we wanted to build an educational project around fine-tuning large language models. We wanted to learn:
+By shrinking the length of the internal monologue, the model saves processing time, bandwidth, and compute cost while preserving the logical structure of its thoughts.
 
-- **Custom SFT Curation:** How to create, clean, validate, and format an end-to-end dataset pipeline.
-- **Apple Silicon Training:** How to use the MLX framework to train and evaluate models locally on a consumer Apple Silicon machine (a Mac M4 GPU).
-- **Style Internalization:** Whether a small LLM could learn to internalize a reasoning style without requiring explicit system prompts.
+### Why Small Models and Local Compute First
 
-We selected **Qwen-3.5-0.8B-Instruct** (and later pivoted to **DeepSeek-R1-Distill-Qwen-1.5B-4bit**) as our target models, using a local Mac M4 GPU as our compute node.
+We began this project as an educational exploration into fine-tuning reasoning models with three core learning goals:
 
-## The Technical Pipeline: How We Built It
+- Custom SFT Curation: How to create, clean, validate, and format an end-to-end dataset pipeline.
+- Apple Silicon Training: How to use the MLX framework to train and evaluate models locally on a consumer Apple Silicon machine (a Mac M4 GPU).
+- Style Internalization: Whether a small LLM could learn to internalize a terse reasoning style without relying on runtime system prompts.
 
-To execute this, we built a modular pipeline from scratch. The pipeline comprises six distinct stages:
+We started with `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B-4bit` on local Apple Silicon before scaling up to `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` on cloud CUDA infrastructure.
 
-- **Stage 1: Prompt Sampling**
-  We stratified general-purpose prompts across six source datasets (StrategyQA, LogiQA, BoolQ, ANLI, PIQA, and ReClor) — sampling 1,000 prompts for Iteration 1 and scaling to 4,000 prompts for Iteration 2 to generate enough correct and validated traces.
-- **Stage 2: Verbose Trace Generation**
-  We ran the base model locally on the M4 GPU to generate raw, verbose reasoning traces. Only prompts where the model answered correctly against the dataset's ground truth were kept, filtering out hallucinated reasoning chains.
-- **Stage 3: Trace Compression**
-  Correct traces were sent concurrently to an API for a larger model acting as the "compressor". Using a detailed system prompt loaded from `style_guide.md`, the compressor rewrote the verbose thinking blocks into a grammar-stripped, telegraphic caveman style.
-- **Stage 4: Automated Style Validation**
-  We built `validate_traces.py` to enforce strict quality filters. It rejected compressed traces that exceeded 50% of the raw trace length, dropped critical numeric facts, omitted multiple-choice option letters, or included meta-commentary (like *"Wait, let me think..."*).
-- **Stage 5: Chat Template Formatting**
-  Accepted traces were formatted into standard chat templates. Since standard templates (like Jinja) often strip `<think>` tags from assistant messages to save context, we bypassed this by template-formatting only the user prompt and manually appending the `<think>compressed_thinking</think>\n\nfinal_answer` sequence.
-- **Stage 6: SFT LoRA Training**
-  We wrapped `mlx_lm.lora` in a training script `train.py` to handle AdamW optimization, logging validation loss curves to `metrics.json`, and rendering loss progression plots in real-time.
+## Phase 1: Local Apple Silicon Experiments (1.5B)
 
-## Detailed Run Iterations
+To execute the initial experiments, we built a modular pipeline from scratch comprising six distinct stages:
 
-To test the Grug Reasoning style, we executed three distinct training runs, tweaking the dataset size, training duration, and SFT formatting layout.
+- Stage 1: Prompt Sampling: Stratified general-purpose prompts across six source datasets (StrategyQA, LogiQA, BoolQ, ANLI, PIQA, and ReClor).
+- Stage 2: Verbose Trace Generation: Ran the base model locally on the M4 GPU to generate raw reasoning traces, filtering out incorrect conclusions.
+- Stage 3: Trace Compression: Synthetically compressed verbose thinking blocks into grammar-stripped, telegraphic bullet points via an LLM compressor.
+- Stage 4: Automated Style Validation: Filtered out compressed traces that exceeded 50% length, dropped numeric facts, or retained conversational commentary.
+- Stage 5: Chat Template Formatting: Appended the `<think>compressed_thinking</think>\n\nfinal_answer` structure onto formatted prompts.
+- Stage 6: SFT LoRA Training: Trained with MLX LoRA (`train.py`) using AdamW, logging validation metrics in real time.
 
 ### Iteration 1: The Proof of Concept
 
-- **Base Model:** `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit`
-- **Dataset Size:** 333 training samples
-- **Training Duration:** 300 steps (LoRA SFT)
-- **Objective:** Establish whether a small, distilled model could internalize the telegraphic "Grug" reasoning format under normal prompt conditions.
-- **Outcome:** The model successfully adopted the "Grug" voice. Its thinking blocks dropped auxiliary words, articles, and verbose commentary.
-- **Key Flaw:** Severe prompt leakage. If evaluated without the custom system prompt, the model would parrot the SFT instructions (*"Think like Grug, keep it brief, no articles..."*) inside the thinking block instead of using it to reason.
+- Base Model: `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit`
+- Dataset Size: 333 training samples
+- Outcome: The model successfully adopted the telegraphic voice, but suffered from severe prompt leakage. When evaluated without the explicit system prompt, the model parroted the training instructions back (*"Think like Grug, keep it brief..."*) inside its thinking block.
 
-### Iteration 2 (Unregularized): Scaling Up
+### Iteration 2: Scaling Up and Regularizing
 
-- **Base Model:** `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit`
-- **Dataset Size:** Scaled to 1,530 training samples (153 validation set)
-- **Training Duration:** 2,000 steps (LoRA SFT)
-- **Objective:** Scale training duration and samples to cement the formatting constraints and stabilize multi-step derivation.
-- **Outcome:** The model achieved extremely clean reasoning formats but suffered from severe overfitting due to the system prompt formatting.
-- **Key Flaw:** Prompt regurgitation worsened. The model would repeat the prompt guidelines back verbatim during evaluations, leading to format compliance failures on standard test prompts.
+- Base Model: `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit`
+- Dataset Size: Scaled to 1,530 training samples
+- Key Technique: SFT Regularization (20% prompt dropout, 30% uncompressed negative example mixing).
+- Outcome: Prompt leakage was completely eliminated, and format compliance reached 98.2%. Thinking tokens dropped by 73.9%, and generation latency was cut in half (from 1.28s to 0.61s).
+- The Alignment Tax: Accuracy on math reasoning (GSM8K) dropped from 70.1% to 54.6%. The small 1.5B model lacked the capacity to compress reasoning without dropping critical intermediate calculation steps.
 
-### Iteration 2 (Regularized): The Final Calibration
+## Phase 2: Cloud CUDA Scaling to 7B and Preference Optimization
 
-- **Base Model:** `mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit`
-- **Dataset Size:** Same 1,530 training samples, but modified using **SFT Regularization** mixtures:
-  - 20% system prompt dropout (no system prompt on positive samples).
-  - 30% negative (verbose) reasoning example mixture (to teach the model to reason normally when not prompted).
-  - 50% negative system prompts (system prompt retained on negative examples to align negative instances).
-- **Training Duration:** 1,000 steps (LoRA SFT)
-- **Objective:** Resolve prompt regurgitation/leakage and establish stable style boundaries.
-- **Outcome:** Complete success. Prompt regurgitation was fully eliminated, and the model learned to apply the style contextually.
-- **Key Metrics:** Average thinking block tokens dropped by **73.9%** (from 517.4 to 135.0 tokens), leading to a **52.3% end-to-end speedup** (from 1.28s to 0.61s) with **98.2% format compliance**.
+To overcome the capacity limits of the 1.5B model and resolve the math alignment tax, we migrated to **DeepSeek-R1-Distill-Qwen-7B** on Kaggle using 2x NVIDIA T4 GPUs.
 
-## The Roadblocks: What Did Not Work
+### Supervised Fine-Tuning at 7B
 
-Fine-tuning reasoning models is notoriously sensitive. We ran into three major failures:
+We applied 4-bit QLoRA fine-tuning using Hugging Face `transformers`, `peft`, and `trl`:
 
-### 1. Small Standard Instruct Models Fail at Reasoning Loops
-Our first choice, Qwen-3.5-0.8B-Instruct, failed completely during the raw trace generation stage. Because standard instruct checkpoints are not aligned using reinforcement learning (RL) specifically for multi-step reasoning, forcing them into a thinking block via prompting caused them to enter infinite self-correcting loops. 
+- Base Model: `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` (4-bit NF4 quantized)
+- Target Modules: `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` (LoRA rank = 16, alpha = 32)
+- Training: Scaled over 1,530 curated demonstrations using standard chat templates.
 
-The 0.8B model would get stuck repeating variations of *"Wait, is X correct? No, because Y. Wait..."* until it hit the 1,536 token generator cap, failing to output a final answer. 
+### The Critical Discovery: SFT Looping Degeneration
 
-**The Fix:** We pivoted to **DeepSeek-R1-Distill-Qwen-1.5B-4bit**. This model was trained using reinforcement learning to think. It natively structures its thoughts inside `<think>...</think>` tags and reliably emits the closing token.
+When evaluating the 7B SFT model across the full 1,319 GSM8K test split, we discovered a notable edge-case failure mode:
 
-### 2. Overfitting and Prompt Leakage
-In Iteration 1 and early Iteration 2 runs, the model suffered from severe prompt leakage. Because it trained only on positive (compressed) traces formatted with the style system prompt, it overfit to the instructions themselves. 
+- For well-behaved samples (over 94% of the split), SFT generated exceptionally terse answers: mean answer length dropped from 160.4 tokens (Base) down to 84.7 tokens (a 47% reduction).
+- However, on 71 difficult math questions, SFT entered a cyclical repetition loop inside the `<think>` block (e.g. repeatedly recalculating intermediate fractions or regurgitating problem facts).
+- Because SFT was stuck looping inside the thinking block, it consumed all 512 generation tokens before ever emitting `</think>`. As a result, format compliance dipped to 94.62%.
 
-During evaluation, even when prompted normally, the model would regurgitate the system instructions inside its thinking block: *"You must think in short, telegraphic fragments. Final answer must be..."* instead of actually solving the problem.
+Supervised fine-tuning alone learns only from positive demonstrations; when an SFT model becomes confused or out-of-distribution, it has no negative feedback mechanism to break out of cyclical reasoning.
 
-**The Fix:** We implemented SFT Regularization:
-- **System Prompt Dropout:** We omitted the system prompt in 20% of the training examples.
-- **Negative Example Mixing:** We mixed in 30% uncompressed, verbose traces (`raw_thinking`) to show the model how to reason normally.
-- **Negative System Prompting:** We kept the system prompt in 50% of the negative instances to train the model not to over-compress reasoning unconditionally.
+### The DPO Solution: Direct Preference Optimization
 
-### 3. The Math "Alignment Tax"
-While the regularized model successfully learned the telegraphic style, its accuracy on the Grade School Math (GSM8K) test split dropped significantly from 70.1% (base) to 54.6% (fine-tuned). 
+To eradicate the looping behavior, we trained a second-stage Direct Preference Optimization (DPO) adapter:
 
-Because our SFT dataset consisted only of general reasoning prompts and lacked math-specific tasks, the model learned to compress reasoning by dropping mathematical derivations, intermediate equations, and calculation checks. It over-compressed its logic, leading to calculation errors.
+- Preference Dataset Construction: We generated pairs of chosen vs rejected trajectories.
+  - Chosen: Concise, well-structured, telegraphic reasoning chains that terminate cleanly with `</think>` and deliver the final answer.
+  - Rejected: Overly verbose, rambling, or looping traces that repeat derivations.
+- Training Dynamics: DPO trained with `beta = 0.1` and learning rate `5e-6` over 1,530 preference pairs.
+- Result: DPO completely cured the looping failure mode. Non-compliant generations dropped from 71 down to just 2 across all 1,319 test questions, restoring format compliance to 99.85% and maintaining 75.44% task accuracy.
 
-## What Worked: The Breakthroughs
+## Full GSM8K Benchmark Results (1,319 Samples)
 
-Despite the setbacks, several elements worked exceptionally well:
+Below are the empirical metrics from the full GSM8K test split evaluated sequentially under unified conditions on NVIDIA T4 hardware:
 
-- **MLX Performance:** Training locally on the Mac M4 GPU using MLX was incredibly efficient. The 1,000-step training runs took less than 30 minutes, and the memory footprint was under 6 GB.
-- **Format Stickiness:** The SFT regularization successfully solved prompt leakage. The model achieved a **98.2% format compliance rate**, outputting clean, parseable `<think>` blocks.
-- **Substantial Token Savings:** Emitted thinking tokens dropped by **73.9%** (from 517.4 down to 135.0 tokens on average).
-- **Latency Reduction:** The average end-to-end latency was cut in half, dropping by **52.3%** (from 1.28 seconds down to 0.61 seconds).
+| Model Variant    | Test Samples | Accuracy | Format Compliance | Mean Thinking Tokens | Mean Answer Tokens | Mean Total Tokens | Mean Latency |
+| :--------------- | :----------: | :------: | :---------------: | :------------------: | :----------------: | :---------------: | :----------: |
+| Base Model (7B)  |    1,319     |  75.97%  |      99.85%       |        122.5         |       160.4        |       427.4       |    6.09s     |
+| SFT Adapter (7B) |    1,319     |  72.18%  |      94.62%       |        107.7         |       107.3        |       434.5       |    6.75s     |
+| DPO Adapter (7B) |    1,319     |  75.44%  |      99.85%       |        122.3         |       162.1        |       428.8       |    6.39s     |
 
-## Experimental Results
+## Key Insights and Breakthroughs
 
-Here is the comparison of our baseline vs. fine-tuned models on the GSM8K test split:
+### 1. The Power of Preference Optimization Over Pure SFT
 
-| Metric                   | Base Model (Style Prompt) | Fine-Tuned Model (Regularized) |       Performance Change        |
-| :----------------------- | :-----------------------: | :----------------------------: | :-----------------------------: |
-| **Accuracy**             |           70.1%           |             54.6%              |    -15.5 pp (Alignment Tax)     |
-| **Mean Thinking Tokens** |           517.4           |             135.0              |    **-73.9%** (Tokens Saved)    |
-| **Mean Total Tokens**    |           582.1           |             214.7              |  **-63.1%** (Bandwidth Saved)   |
-| **Mean Latency (s)**     |           1.28s           |             0.61s              |      **-52.3%** (Speedup)       |
-| **Format Compliance**    |           91.1%           |             98.2%              | **+7.1 pp** (Format Stickiness) |
+SFT is sufficient to teach an LLM a stylistic syntax (such as bullet points or telegraphic shorthand), but it cannot teach the model when to stop when it is uncertain. DPO provides the negative gradient needed to suppress wandering monologues and looping degenerations.
 
-## Next Steps: The Future
+### 2. Resolution of the Math Alignment Tax at 7B
 
-The results show that while reasoning style transfer is highly effective at saving tokens and latency, the 1.5B model's capacity limit results in a heavy alignment tax. 
+In the 1.5B model, compressing thoughts dropped math accuracy by 15.5 percentage points. At 7B, the model possessed sufficient parameter capacity to maintain mathematical rigor: the DPO adapter achieved 75.44% accuracy on GSM8K, within 0.5% of the uncompressed base model (75.97%).
 
-To build on these findings, we plan to focus on:
+### 3. Unified Two-Repository Architecture
 
-### 1. Scaling to Larger Base Models
-We want to transition from the 1.5B model to larger distilled reasoning models, such as **DeepSeek-R1-Distill-Qwen-7B** or Llama-8B-based distill variants. Larger models have significantly higher representation capacity. This increased capacity should allow the model to absorb the telegraphic style constraints and internalize the Grug reasoning format without sacrificing task accuracy.
+All deliverables from both phases of the project have been structured into a clean two-repository ecosystem on Hugging Face:
 
-### 2. Task-Specific SFT Mixing
-To eliminate the math alignment tax, we will generate and inject math-specific (GSM8K) SFT training traces into the dataset. This will teach the model how to express mathematical calculations and derivations telegraphically without skipping key intermediate equations.
-
-### 3. Scaling SFT Data
-We will scale the SFT dataset from 1,701 to 5,000+ samples.
-
-### 4. Calibrating Adapter Capacity
-We will reduce the LoRA rank from 16 to 8 or 4, and restrict target layers to `q_proj` and `v_proj` to act as an implicit regularizer, preventing the adapter from overriding the base weights too aggressively.
+- Model LoRA Adapters: [hari31416/deepseek-r1-grug-adapters](https://huggingface.co/hari31416/deepseek-r1-grug-adapters)
+  Houses both 7B PEFT adapters (`sft/`, `dpo/`) and 1.5B Apple Silicon MLX adapters (`it-1/`, `it-2-regularized/`, `it-2-unregularized/`).
+- Datasets and Full Benchmarks: [hari31416/grug-reasoning-data-and-benchmarks](https://huggingface.co/datasets/hari31416/grug-reasoning-data-and-benchmarks)
+  Houses all SFT splits, DPO preference pairs, full 1,319-sample generation JSON logs, and comparative dashboard figures.
