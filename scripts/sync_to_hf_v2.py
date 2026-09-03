@@ -15,7 +15,7 @@ logger = logging.getLogger("sync_hf_v2")
 
 WORKSPACE_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATASET_REPO_ID: str = "hari31416/grug-reasoning-data-and-benchmarks"
-MODEL_REPO_ID: str = "hari31416/deepseek-r1-7b-grug-adapters"
+MODEL_REPO_ID: str = "hari31416/deepseek-r1-grug-adapters"
 
 
 def copy_path(src: str, dst: str) -> None:
@@ -97,7 +97,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 
 base_model_id = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-adapter_repo = "hari31416/deepseek-r1-7b-grug-adapters"
+adapter_repo = "hari31416/deepseek-r1-grug-adapters"
 
 # Load base model in 4-bit for memory efficiency
 bnb_config = BitsAndBytesConfig(
@@ -293,7 +293,7 @@ dpo_train = load_dataset(
 
 # Related Resources
 
-- Model LoRA Adapters: [hari31416/deepseek-r1-7b-grug-adapters](https://huggingface.co/hari31416/deepseek-r1-7b-grug-adapters)
+- Model LoRA Adapters: [hari31416/deepseek-r1-grug-adapters](https://huggingface.co/hari31416/deepseek-r1-grug-adapters)
 - GitHub Project: [Hari31416/qwen-grug-finetune](https://github.com/Hari31416/qwen-grug-finetune)
 """
     return card.strip() + "\n"

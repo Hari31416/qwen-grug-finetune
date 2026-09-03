@@ -17,7 +17,7 @@ The investigation progressed through two primary phases:
 
 All trained weights, dataset splits, full-length evaluation logs, and visualization dashboards are published on Hugging Face:
 
-- Model LoRA Adapters: [hari31416/deepseek-r1-7b-grug-adapters](https://huggingface.co/hari31416/deepseek-r1-7b-grug-adapters)
+- Model LoRA Adapters: [hari31416/deepseek-r1-grug-adapters](https://huggingface.co/hari31416/deepseek-r1-grug-adapters)
 - Datasets and Benchmark Logs: [hari31416/grug-reasoning-data-and-benchmarks](https://huggingface.co/datasets/hari31416/grug-reasoning-data-and-benchmarks)
 
 ## Qualitative Example
